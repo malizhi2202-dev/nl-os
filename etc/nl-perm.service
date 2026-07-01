@@ -1,0 +1,16 @@
+[Unit]
+Description=NL-OS Permission Daemon
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/nl-perm
+Restart=always
+RestartSec=1
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/nl-os /etc/nl-os
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
