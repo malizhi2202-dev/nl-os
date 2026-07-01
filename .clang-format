@@ -1,0 +1,15 @@
+# clang-format 配置（C11, LLVM 风格改编）
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+PointerAlignment: Right
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+SpaceAfterCStyleCast: true
+CommentPragmas: '^ NOLINT'

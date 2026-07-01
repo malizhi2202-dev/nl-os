@@ -1,15 +1,38 @@
-# 使用者项目里的临时产物（flow-kit 只提供模板，不跟踪实例）
+# 构建产物
+build/
+build-*/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 模型文件（大文件，不纳入 git）
+models/*.gguf
+models/*.bin
+
+# 编译产物
+*.o
+*.so
+*.a
+
+# 测试产物
+Testing/
+CTestTestfile.cmake
+DartConfiguration.tcl
+
+# flow-kit 产物跟踪
 .specs/
 !.specs/.gitkeep
 
-# 编辑器 / 系统
-.vscode/
-.idea/
+# 系统文件
 .DS_Store
 Thumbs.db
-*.swp
-*.swo
 
-# 日志与临时文件
+# 临时文件
+/tmp/
+*.tmp
 *.log
-tmp/
