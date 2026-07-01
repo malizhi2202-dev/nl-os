@@ -77,11 +77,11 @@ const NlModelInfo *nl_model_get_info(const NlModel *model) {
 int nl_model_infer(NlModel *model, const char *prompt, char *output, size_t max_len) {
     if (!model || !output || max_len == 0) return -1;
 
-    /* Stub: 返回固定 JSON（模拟意图分类结果） */
+    /* Stub: 返回固定 JSON（模拟意图分类结果，置信度足够高以通过校验） */
     const char *stub_response =
-        "{\"intent\":\"other\","
-        "\"entities\":{\"target\":\"\"},"
-        "\"confidence\":0.5}";
+        "{\"intent\":\"create_dir\","
+        "\"entities\":{\"target\":\"test_dir\",\"location\":\".\"},"
+        "\"confidence\":0.85}";
 
     size_t len = strlen(stub_response);
     if (len >= max_len) len = max_len - 1;

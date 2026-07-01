@@ -38,11 +38,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/template_fill_test.c)
     add_test(NAME template_fill COMMAND test_template_fill)
 endif()
 
-# intent_extract 测试（T06）
+# intent_extract 测试（T06 · 依赖 model_loader/few_shot/json_helper → 链接 nlc）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/intent_extract_test.c)
     add_executable(test_intent_extract unit/intent_extract_test.c)
-    target_include_directories(test_intent_extract PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
-    target_link_libraries(test_intent_extract PRIVATE cjson)
+    target_include_directories(test_intent_extract PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_intent_extract PRIVATE nlc cjson)
     add_test(NAME intent_extract COMMAND test_intent_extract)
 endif()
 
@@ -77,11 +78,11 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/component/perm_ipc_test.c)
     add_test(NAME perm_ipc COMMAND test_perm_ipc)
 endif()
 
-# schema 验证测试（T06）
+# schema 验证测试（T06 · 链接 nlc + cjson）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/model/schema_validation_test.c)
     add_executable(test_schema_validation model/schema_validation_test.c)
     target_include_directories(test_schema_validation PRIVATE
         ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
-    target_link_libraries(test_schema_validation PRIVATE cjson)
+    target_link_libraries(test_schema_validation PRIVATE nlc cjson)
     add_test(NAME schema_validation COMMAND test_schema_validation)
 endif()
