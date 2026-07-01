@@ -14,11 +14,10 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/json_helper_test.c)
     add_test(NAME json_helper COMMAND test_json_helper)
 endif()
 
-# path_safety 测试（T02）
+# path_safety 测试（T02 · 测试文件直接 #include 源码，不需要单独链接）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/path_safety_test.c)
     add_executable(test_path_safety
         unit/path_safety_test.c
-        ${CMAKE_SOURCE_DIR}/src/libnlc/path_safety.c
     )
     target_include_directories(test_path_safety PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
     add_test(NAME path_safety COMMAND test_path_safety)

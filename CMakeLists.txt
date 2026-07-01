@@ -10,7 +10,9 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-Wall -Wextra -Wpedantic -Werror
     -Wno-unused-parameter
-    -Wno-missing-field-initializers)
+    -Wno-missing-field-initializers
+    -Wno-unused-function)
+add_compile_definitions(_GNU_SOURCE)  # Linux POSIX: PATH_MAX, realpath, strdup, strndup
 
 # Debug 模式下额外选项
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
