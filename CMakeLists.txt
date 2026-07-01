@@ -39,17 +39,20 @@ add_library(cjson STATIC
 target_include_directories(cjson PUBLIC third_party/cJSON)
 target_compile_options(cjson PRIVATE -w -fPIC)  # 抑制 vendor 代码警告 + PIC for shared lib
 
-# ggml（可选 · stub 模式用于早期开发 · T03/T06 接入）
-option(BUILD_STUB_MODEL "Build with stub model loader (no ggml)" ON)
+# llama.cpp + ggml（系统安装 · Phase 2 真实推理）
+option(BUILD_STUB_MODEL "Build with stub model loader" OFF)
 if(NOT BUILD_STUB_MODEL)
-    add_library(ggml STATIC
-        third_party/ggml/ggml.c
-        third_party/ggml/ggml-cpu.c
-        third_party/ggml/gguf.c
-    )
-    target_include_directories(ggml PUBLIC third_party/ggml)
-    target_compile_options(ggml PRIVATE -w)
-    target_link_libraries(ggml PUBLIC Threads::Threads m)
+    find_library(LLAMA_LIB llama PATHS /usr/local/lib)
+    find_library(GGML_LIB ggml PATHS /usr/local/lib)
+    if(LLAMA_LIB AND GGML_LIB)
+        message(STATUS "Found system llama.cpp: ${LLAMA_LIB}")
+        add_library(llama_sys INTERFACE)
+        target_include_directories(llama_sys INTERFACE /usr/local/include)
+        target_link_libraries(llama_sys INTERFACE ${LLAMA_LIB} ${GGML_LIB} Threads::Threads m)
+    else()
+        message(WARNING "llama.cpp not found, using stub model")
+        set(BUILD_STUB_MODEL ON)
+    endif()
 endif()
 
 # ============================================================
@@ -68,7 +71,8 @@ add_library(nlc SHARED
 target_include_directories(nlc PUBLIC src/libnlc)
 target_link_libraries(nlc PUBLIC cjson Threads::Threads)
 if(NOT BUILD_STUB_MODEL)
-    target_link_libraries(nlc PUBLIC ggml)
+    target_link_libraries(nlc PUBLIC llama_sys)
+    target_compile_definitions(nlc PRIVATE GGML_USE_CPU)
 endif()
 
 # ============================================================
