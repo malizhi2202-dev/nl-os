@@ -66,10 +66,18 @@ cJSON *cJSON_CreateNumber(double d) {
  * ============================================================ */
 static void cjson_attach_child(cJSON *parent, cJSON *child) {
     if (!parent || !child) return;
-    child->prev = NULL;
-    child->next = parent->child;
-    if (parent->child) parent->child->prev = child;
-    parent->child = child;
+    child->next = NULL;
+    if (!parent->child) {
+        /* 第一个子节点 */
+        child->prev = NULL;
+        parent->child = child;
+    } else {
+        /* 追加到尾部（保持插入顺序） */
+        cJSON *tail = parent->child;
+        while (tail->next) tail = tail->next;
+        tail->next = child;
+        child->prev = tail;
+    }
 }
 
 void cJSON_AddItemToArray(cJSON *arr, cJSON *item) {
