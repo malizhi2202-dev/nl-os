@@ -5,6 +5,7 @@ cmake-build-*/
 
 # IDE
 .idea/
+
 .vscode/
 *.swp
 *.swo
@@ -38,5 +39,6 @@ Thumbs.db
 *.log
 # 忽略这个
 flow-kit
+code-kit
 .specs
 .claude
