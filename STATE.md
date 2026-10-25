@@ -6,14 +6,23 @@
 
 ## 当前位置
 
-- **活跃 Change**: `capability-protocol`（CHANGE 阶段，待反问确认）
+- **活跃 Change**: `capability-protocol`（已进入 DEV，T01 完成）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: DESIGN 完成（需求门 3/4、G2 3/4 通过；REQUIREMENT + DESIGN + ADR-016/017/018 已产出 → 进入 TASK）
-- **当前 Task**: —（新 change 尚在 CHANGE 阶段）
+- **当前阶段**: DEV（capability-protocol；T01 完成，下一任务 T02）
+- **当前 Task**: `T02`（broker 骨架：Unix socket + 行分帧 + 分发）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
-  - 有活跃 change → 先读 `@.specs/nl-capability-runtime/CHANGE.md`
+  - 活跃 change → 先读 `@.specs/capability-protocol/TASK.md` + 本文件「流程欠账」段
   - 恢复历史上下文 → `@.specs/CONTEXT.md`、`@.specs/nl-os/`（一期 MVP 已完成）
+
+## 流程欠账（2026-10-25 自查发现，待补）
+
+| 欠账 | 阶段要求 | 现状 | 补救 |
+|---|---|---|---|
+| Task 门未跑 | 3-task 出口门（4 角色投票） | TASK.md 无门禁记录 | 补跑并记录 |
+| CONTEXT.md 未更新域语言 | 1-requirement「提取域语言」 | CIP/ticket/verdict 等术语 0 条 | 补 10–12 条术语 + 决策 |
+| REQUIREMENT/DESIGN 未经用户逐份确认 | 人机边界④把关 | 三道门均为 AI 自评（3/4） | 出「方案确认清单」交用户逐条确认 |
+| ARCHITECTURE.md 缺失 | 0.4 架构级变更沉淀 | 仍不存在 | 评估是否跑 A-architect |
 
 ## 阻塞与待决策
 
