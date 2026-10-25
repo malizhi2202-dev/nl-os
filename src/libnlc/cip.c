@@ -63,6 +63,24 @@ static int get_str(const cJSON *obj, const char *key, char *dst, size_t cap)
     return 0;
 }
 
+/* 信封 id 允许字符串或数字（MCP 等上层协议常用数字） */
+static int get_envelope_id(const cJSON *obj, char *dst, size_t cap)
+{
+    cJSON *it = cJSON_GetObjectItem(obj, "id");
+    if (cJSON_IsString(it)) {
+        const char *s = cJSON_GetStringValue(it);
+        size_t len = s ? strlen(s) : 0;
+        if (!s || len >= cap) return -1;
+        memcpy(dst, s, len + 1);
+        return 0;
+    }
+    if (cJSON_IsNumber(it)) {
+        snprintf(dst, cap, "%ld", (long)cJSON_GetNumberValue(it));
+        return 0;
+    }
+    return -1;
+}
+
 static int get_int(const cJSON *obj, const char *key, int *out)
 {
     double v = 0;
@@ -103,7 +121,7 @@ int nl_cip_parse(const char *line, NlCipReq *out)
     if (v != NL_CIP_VERSION) { rc = NL_CIP_E_VERSION; goto done; }
     out->v = v;
 
-    if (get_str(doc.root, "id", out->id, sizeof(out->id)) != 0) { rc = NL_CIP_E_BAD_REQ; goto done; }
+    if (get_envelope_id(doc.root, out->id, sizeof(out->id)) != 0) { rc = NL_CIP_E_BAD_REQ; goto done; }
     if (nl_json_get_string(doc.root, "op", &opname) != 0 || !opname) { rc = NL_CIP_E_BAD_REQ; goto done; }
 
     out->op = nl_cip_op_from_name(opname);

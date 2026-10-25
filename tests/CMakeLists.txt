@@ -186,3 +186,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_mcp_test.c)
     target_link_libraries(test_adapter_mcp PRIVATE nlc cjson)
     add_test(NAME adapter_mcp COMMAND test_adapter_mcp)
 endif()
+
+# MCP 门面（T12）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/facade_mcp_test.c)
+    add_executable(test_facade_mcp unit/facade_mcp_test.c)
+    target_include_directories(test_facade_mcp PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_facade_mcp PRIVATE nlc cjson)
+    add_test(NAME facade_mcp COMMAND test_facade_mcp)
+endif()

@@ -295,7 +295,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T08</depends_on>
 </task>
 
-<task id="T12" parallel="true" status="pending" auto="true">
+<task id="T12" parallel="true" status="done" auto="true">
   <name>MCP 门面：仅暴露 perm ≤ L2（AC-6）</name>
   <read_files>
     src/nlbroker/adapter_mcp.h
@@ -304,6 +304,8 @@ W5 HTTP+收口    T13[P] → T14                  │
   <write_files>
     src/nlbroker/facade_mcp.c
     src/nlbroker/facade_mcp.h
+    src/nlbroker/main.c            <!-- 扩范围：--facade-mcp -->
+    src/libnlc/cip.c               <!-- 扩范围：信封 id 接受数字（协议缺陷） -->
     tests/unit/facade_mcp_test.c
   </write_files>
   <action>

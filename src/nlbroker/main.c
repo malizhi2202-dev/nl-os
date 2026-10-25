@@ -5,6 +5,7 @@
 #include "dispatch.h"
 #include "adapter_dbus.h"
 #include "adapter_mcp.h"
+#include "facade_mcp.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -22,7 +23,8 @@ static void usage(void)
 {
     printf("nlbroker — NL-OS capability broker (CIP v1)\n");
     printf("用法: nlbroker [--socket PATH] [--registry PATH] [--scan-dbus]\n");
-    printf("                [--mcp-name NAME --mcp-cmd PATH [--mcp-arg ARG]...] [--dry-run]\n");
+    printf("                [--mcp-name NAME --mcp-cmd PATH [--mcp-arg ARG]...]\n");
+    printf("                [--facade-mcp] [--dry-run]\n");
 }
 
 int main(int argc, char **argv)
@@ -33,6 +35,7 @@ int main(int argc, char **argv)
     const char *registry_path = NULL;
     int dry_run = 0;
     int scan_dbus = 0;
+    int facade_mcp = 0;
     const char *mcp_name = NULL;
     const char *mcp_cmd = NULL;
     char *mcp_args[16];
@@ -49,6 +52,8 @@ int main(int argc, char **argv)
             mcp_cmd = argv[++i];
         } else if (strcmp(argv[i], "--mcp-arg") == 0 && i + 1 < argc && mcp_nargs < 16) {
             mcp_args[mcp_nargs++] = argv[++i];
+        } else if (strcmp(argv[i], "--facade-mcp") == 0) {
+            facade_mcp = 1;
         } else if (strcmp(argv[i], "--scan-dbus") == 0) {
             scan_dbus = 1;
         } else if (strcmp(argv[i], "--dry-run") == 0) {
@@ -108,6 +113,13 @@ int main(int argc, char **argv)
             fprintf(stderr, "nlbroker: MCP %s 登记 %d 个工具\n", nm, added < 0 ? 0 : added);
             nl_dispatch_set_mcp(&disp, mcp);
         }
+    }
+
+    if (facade_mcp) {
+        int frc = nl_facade_run(&disp, STDIN_FILENO, STDOUT_FILENO);
+        if (mcp) nl_mcp_stop(mcp);
+        nl_dispatch_free(&disp);
+        return frc == 0 ? 0 : 1;
     }
 
     nl_server_set_handler(nl_dispatch_line, &disp);

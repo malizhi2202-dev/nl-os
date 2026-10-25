@@ -105,6 +105,7 @@ add_executable(nlbroker
     src/nlbroker/adapter_cli.c
     src/nlbroker/adapter_dbus.c
     src/nlbroker/adapter_mcp.c
+    src/nlbroker/facade_mcp.c
 )
 target_link_libraries(nlbroker PRIVATE nlc)
 
