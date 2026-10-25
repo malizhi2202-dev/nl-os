@@ -1,7 +1,7 @@
 # TEST: 统一能力调用协议（CIP v1）+ 本地 broker
 
 - **Change ID**: `capability-protocol`
-- **关联**: `@.specs/capability-protocol/{REQUIREMENT,DESIGN,TASK}.md`
+- **关联**: `@.specs/archive/2026-10-25-capability-protocol/{REQUIREMENT,DESIGN,TASK}.md`
 - **测试基线**: `ctest 20/20`、`scripts/verify_all.sh`（AC-1~AC-10 全绿）、`build-cov`（`--coverage`）
 
 ---

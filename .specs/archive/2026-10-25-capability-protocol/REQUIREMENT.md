@@ -1,7 +1,7 @@
 # REQUIREMENT: 统一能力调用协议（CIP v1）+ 本地 broker
 
 - **Change ID**: `capability-protocol`
-- **关联**: `@.specs/capability-protocol/CHANGE.md`、`@.specs/CONTEXT.md`、`@.specs/discovery/claim-verification.md`
+- **关联**: `@.specs/archive/2026-10-25-capability-protocol/CHANGE.md`、`@.specs/CONTEXT.md`、`@.specs/discovery/claim-verification.md`
 
 ---
 

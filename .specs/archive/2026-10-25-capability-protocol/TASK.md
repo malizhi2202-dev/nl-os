@@ -1,7 +1,7 @@
 # TASK: 统一能力调用协议（CIP v1）+ 本地 broker
 
 - **Change ID**: `capability-protocol`
-- **关联**: `@.specs/capability-protocol/{REQUIREMENT,DESIGN}.md`、`@.specs/adr/016~018`
+- **关联**: `@.specs/archive/2026-10-25-capability-protocol/{REQUIREMENT,DESIGN}.md`、`@.specs/adr/016~018`
 - **拆解依据**: DESIGN §6 的 W1–W5；每条任务对应 REQUIREMENT 的 AC
 - **纪律**: 每个任务 2–10 分钟可完成、含可执行 `verify`；**不允许一个任务跨两个适配器**
 
@@ -27,7 +27,7 @@ W5 HTTP+收口    T13[P] → T14                  │
 <task id="T01" parallel="false" status="done" auto="true">
   <name>cip：协议编解码（信封 + 5 报文 + 9 错误码）</name>
   <read_files>
-    .specs/capability-protocol/DESIGN.md      <!-- §3 契约 -->
+    .specs/archive/2026-10-25-capability-protocol/DESIGN.md      <!-- §3 契约 -->
     .specs/adr/016-cip-protocol.md
     src/libnlc/json_helper.h
     third_party/cJSON/cJSON.h
@@ -86,7 +86,7 @@ W5 HTTP+收口    T13[P] → T14                  │
     src/libnlc/capability_registry.c
     src/libnlc/capability_registry.h
     .specs/adr/012-capability-registry.md
-    .specs/capability-protocol/DESIGN.md      <!-- §1 / AC-2 -->
+    .specs/archive/2026-10-25-capability-protocol/DESIGN.md      <!-- §1 / AC-2 -->
   </read_files>
   <write_files>
     src/libnlc/capability_registry.c
@@ -110,7 +110,7 @@ W5 HTTP+收口    T13[P] → T14                  │
     src/libnlc/path_safety.h
     src/libnlc/capability_registry.h
     src/libnlc/cip.h
-    .specs/capability-protocol/DESIGN.md      <!-- §4 威胁模型 -->
+    .specs/archive/2026-10-25-capability-protocol/DESIGN.md      <!-- §4 威胁模型 -->
   </read_files>
   <write_files>
     src/nlbroker/verdict.c
@@ -180,7 +180,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <name>审计：JSONL 写入 + audit 查询 + 脱敏（AC-9）</name>
   <read_files>
     src/libnlc/audit.h          <!-- T06 骨架已建 -->
-    .specs/capability-protocol/REQUIREMENT.md   <!-- AC-9 -->
+    .specs/archive/2026-10-25-capability-protocol/REQUIREMENT.md   <!-- AC-9 -->
   </read_files>
   <write_files>
     src/libnlc/audit.c
@@ -299,7 +299,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <name>MCP 门面：仅暴露 perm ≤ L2（AC-6）</name>
   <read_files>
     src/nlbroker/adapter_mcp.h
-    .specs/capability-protocol/REQUIREMENT.md   <!-- AC-6 -->
+    .specs/archive/2026-10-25-capability-protocol/REQUIREMENT.md   <!-- AC-6 -->
   </read_files>
   <write_files>
     src/nlbroker/facade_mcp.c
@@ -323,7 +323,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <name>http 适配器（beta）：最小 HTTP/1.1，仅 http://（AC-8）</name>
   <read_files>
     src/nlbroker/adapter_cli.h
-    .specs/capability-protocol/DESIGN.md   <!-- §1 http 行 -->
+    .specs/archive/2026-10-25-capability-protocol/DESIGN.md   <!-- §1 http 行 -->
   </read_files>
   <write_files>
     src/nlbroker/adapter_http.c
@@ -347,12 +347,12 @@ W5 HTTP+收口    T13[P] → T14                  │
 <task id="T14" parallel="false" status="done" auto="false">
   <name>🔒 收口：AC 全量验证 + 对抗用例 + 资源门限</name>
   <read_files>
-    .specs/capability-protocol/REQUIREMENT.md
+    .specs/archive/2026-10-25-capability-protocol/REQUIREMENT.md
     scripts/verify_w2.sh
   </read_files>
   <write_files>
     scripts/verify_all.sh
-    .specs/capability-protocol/UAT.md
+    .specs/archive/2026-10-25-capability-protocol/UAT.md
   </write_files>
   <action>
     1. `scripts/verify_all.sh` 覆盖 AC-1~AC-10

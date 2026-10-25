@@ -1,7 +1,7 @@
 # DESIGN: 统一能力调用协议（CIP v1）+ 本地 broker
 
 - **Change ID**: `capability-protocol`
-- **关联**: `@.specs/capability-protocol/{CHANGE,REQUIREMENT}.md`、`@.specs/discovery/*`、`@.specs/adr/015-device-tiers.md`
+- **关联**: `@.specs/archive/2026-10-25-capability-protocol/{CHANGE,REQUIREMENT}.md`、`@.specs/discovery/*`、`@.specs/adr/015-device-tiers.md`
 - **作者**: AI（Architect）+ 四角色专家团三轮讨论
 
 ---

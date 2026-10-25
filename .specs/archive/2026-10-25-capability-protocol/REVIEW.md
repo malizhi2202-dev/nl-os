@@ -1,7 +1,7 @@
 # REVIEW: 统一能力调用协议（CIP v1）+ 本地 broker
 
 - **Change ID**: `capability-protocol`
-- **关联**: `@.specs/capability-protocol/{REQUIREMENT,DESIGN,TASK,TEST}.md`
+- **关联**: `@.specs/archive/2026-10-25-capability-protocol/{REQUIREMENT,DESIGN,TASK,TEST}.md`
 - **审查基线**: `git log --oneline 729a96b..HEAD`（T01–T14 全部提交）
 - **UI 轮**: ❌ 跳过（纯 CLI/daemon 项目，无界面；按 R2.10 豁免）
 

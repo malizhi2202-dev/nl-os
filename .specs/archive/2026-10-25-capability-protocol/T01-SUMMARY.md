@@ -35,7 +35,7 @@ DESIGN.md §3 与 REQUIREMENT.md 的 AC 示例已同步（R18：决定必须落�
 | `src/libnlc/cip.h` / `cip.c` | 新增 |
 | `tests/unit/cip_test.c` | 新增（7 case） |
 | `CMakeLists.txt` / `tests/CMakeLists.txt` | 修改（接入 nlc + 测试注册） |
-| `.specs/capability-protocol/{DESIGN,REQUIREMENT}.md` | 更正 `capability` 字段 |
+| `.specs/archive/2026-10-25-capability-protocol/{DESIGN,REQUIREMENT}.md` | 更正 `capability` 字段 |
 
 ## verify 输出
 

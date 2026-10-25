@@ -40,3 +40,43 @@
 扫地机器人 SoC（全志 Cortex-A7 四核 + 512MB DDR3 + 4GB eMMC）是"能跑 Linux 的最小现实样本"。
 0.35B decoder 常驻约 250MB，在这类机器上会 OOM → A1 档只能上 25MB 的 embedding。
 **设计任何"端侧常驻内存"预算时，用 512MB 而不是 4GB 兜底。**
+
+## 2026-10-25 · 只在 Release 才报的 `-Werror=unused-result`
+
+**症状**：Debug 构建全绿，第一次 `-DCMAKE_BUILD_TYPE=Release` 构建失败：
+`ignoring return value of 'write' declared with attribute 'warn_unused_result'`。
+
+**根因**：Release 默认启用 `_FORTIFY_SOURCE`，`write`/`read` 等被标记 `warn_unused_result`；
+`(void)write(...)` 不能消除该属性告警。
+
+**正确做法**：消费返回值（`if (write(...) < 0) { /* ignore */ }`）。
+**推广**：任何"只在 Debug 跑"的项目，交付前必须跑一次 Release 构建——否则会集中爆雷。
+
+## 2026-10-25 · 失败响应必须先渲染 error
+
+**症状**：`https` 拒绝返回 `{"ok":false,"result":{"alternatives":[...]}}`——**错误码消失**。
+
+**根因**：`nl_cip_render` 先判 `payload` 非空就输出 `ok:false + result`，而 `error` 只在
+"无 payload 的失败"分支里写。于是所有"拒绝但附替代方案"的响应都丢错误码。
+
+**正确做法**：渲染顺序 = **先判 `!ok`**（带/不带 payload 两分支），再判 `ok + payload`。
+**推广**：任何"状态 + 附加数据"的序列化，先处理异常态。
+
+## 2026-10-25 · 实现了但没接线 ≈ 没实现
+
+**症状**：ticket 限速 `nl_ticket_rate_ok()` 写好了、也有单测，但**从没有调用点**；
+ADR 里承诺的 DoS 缓解实际不生效。
+
+**根因**：单元测试直接调这个函数 → 通过；但端到端路径没接。
+
+**正确做法**：安全类断言必须打在**端到端路径**上（`verify_all.sh` 连发 120 次 invoke，
+断言出现 `E_POLICY_DENY`）。单测只能证明"函数对"，不能证明"系统在用"。
+
+## 2026-10-25 · 审计/日志截断要丢最旧的，不是最新的
+
+**症状**：`audit` 查询返回的最老记录，新写入的事件（含刚发生的拒绝）看不到。
+
+**根因**：按行顺序填充到缓冲区，超长时截断尾部。
+
+**正确做法**：环形保留"最近 N 条"，字节不足时**从最旧开始丢弃**。
+排障场景要的是"刚刚发生了什么"。

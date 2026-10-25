@@ -6,13 +6,14 @@
 
 ## 当前位置
 
-- **活跃 Change**: `capability-protocol`（已进入 DEV，T01 完成）
+- **活跃 Change**: 无（`capability-protocol` 已完成并归档）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: INTEGRATION（capability-protocol；REVIEW.md 三轮完成 + T-FIX-01~05 已修，G4 3/4 → 7-integration）
-- **当前 Task**: 7-integration（UAT.md + 归档 + STATE/CHANGELOG/LESSONS）
+- **当前阶段**: 无（capability-protocol 已归档；下一轮可由用户开新 CHANGE）
+- **当前 Task**: —
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
-  - 活跃 change → 先读 `@.specs/capability-protocol/TASK.md` + 本文件「流程欠账」段
+  - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`（CHANGE/REQUIREMENT/DESIGN/TASK/TEST/REVIEW/UAT + 14 个 SUMMARY）
+  - 暂停中的 change → `@.specs/nl-capability-runtime/PROGRESS.md`
   - 恢复历史上下文 → `@.specs/CONTEXT.md`、`@.specs/nl-os/`（一期 MVP 已完成）
 
 ## 流程欠账（2026-10-25 自查发现，待补）
@@ -42,6 +43,7 @@
 - `[2026-10-25]` **CIP v1 定案**：五报文 / 两阶段 invoke-commit / plan 用 argv 数组 / effect 五类缺省 delete / 威胁模型"模型不可信、系统用户可信" — `@.specs/adr/016-cip-protocol.md`
 - `[2026-10-25]` **broker 独立进程 + fail-closed + ticket 一次性(TTL60s,args 哈希)** — `@.specs/adr/017-broker-process.md`
 - `[2026-10-25]` **执行面用子进程桥/最小实现，不引 libdbus/libcurl/TLS** — `@.specs/adr/018-capability-adapters.md`
+- `[2026-10-25]` **capability-protocol 归档**：CIP v1 全链路验收通过（`ctest 20/20`、`verify_all.sh` 31 断言），产物移至 `.specs/archive/2026-10-25-capability-protocol/`
 - `[2026-10-25]` **差异化假设被推翻并收窄**：安全执行层非空白（Belay/Leash/Pipelock 等 7 个项目）；新定位 = 端侧档位 + 零运行时 + 中文 — `@.specs/discovery/claim-verification.md`
 - `[2026-10-25]` **ADR-015 修正**：支持地板 = ARMv7-A/ARMv8-A + MMU + Linux + ≥128MB RAM；Tier A 细分 A1(128–768MB，仅 embedding)/A2(1–4GB)；**MCU/RTOS 家电（空调 Cortex-M0 128KB Flash）明确 out of scope**
 - `[2026-10-25]` **ADR-015 设备分档**：A(≤4GB) embedding 为主 / B(8-16GB) +0.5B decoder / C(≥32GB) +大模型；判断后端抽象、运行期自降档 — `@.specs/adr/015-device-tiers.md`
@@ -52,6 +54,7 @@
 
 | 日期 | Change | 摘要 | PR |
 |---|---|---|---|
+| 2026-10-25 | capability-protocol | CIP v1 协议 + broker + 四执行面 + MCP 门面（AC 10/10） | — |
 | 2026-07-02 | nl-os | 一期 MVP：四层管线 + L1–L4 + `.tools` | — |
 | 2026-07-01 | nl-os-phase2 | 真实推理 + 安全强化（draft，未开工） | — |
 
