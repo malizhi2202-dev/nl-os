@@ -79,6 +79,7 @@ add_library(nlc SHARED
     src/libnlc/cip.c
     src/libnlc/sha256.c
     src/libnlc/decision.c
+    src/libnlc/decision_cmd.c
     src/libnlc/decision_model.c
     src/libnlc/freeze.c
     src/libnlc/snapshot.c

@@ -217,9 +217,21 @@ t=$(/usr/bin/time -f "rss=%M" "$NLSH" --yes -c '创建一个叫 lazy_dir 的文�
 rss=$(printf '%s' "$t" | sed -n 's/.*rss=\([0-9]*\).*/\1/p')
 chk "AC-14 规则可决定：目录已创建" "[ -d lazy_dir ]"
 chk "AC-14 规则可决定：未加载模型（RSS ${rss:-?}KB < 200MB）" "[ -n '$rss' ] && [ '$rss' -lt 200000 ]"
-t=$(/usr/bin/time -f "rss=%M" "$NLSH" -c '显示当前工作目录' 2>&1 >/dev/null | tail -1)
+# 真正需要模型的句子：规则不命中，且决策层也没有候选/表外工具（ADR-022 之后
+# `显示当前工作目录` 已由决策层兜底、不再加载模型，不能再拿来当"必然加载模型"的例子）
+t=$(/usr/bin/time -f "rss=%M" "$NLSH" -c '总结一下这个目录是干什么用的' 2>&1 >/dev/null | tail -1)
 rss2=$(printf '%s' "$t" | sed -n 's/.*rss=\([0-9]*\).*/\1/p')
 chk "AC-14 规则未命中：真加载模型（RSS ${rss2:-?}KB > 300MB）" "[ -n '$rss2' ] && [ '$rss2' -gt 300000 ]"
+
+# AC-15 决策层兜底：L1 只读工具认得出就执行，**不加载模型**，且表外/高危不猜
+t=$(/usr/bin/time -f "rss=%M" "$NLSH" -c '显示当前工作目录' 2>&1 >/dev/null | tail -1)
+rss3=$(printf '%s' "$t" | sed -n 's/.*rss=\([0-9]*\).*/\1/p')
+out=$("$NLSH" -c '显示当前工作目录' 2>&1); rc=$?
+chk "AC-15 决策层兜底 pwd（不加载模型，RSS ${rss3:-?}KB < 200MB）" \
+    "[ -n '$rss3' ] && [ '$rss3' -lt 200000 ] && [ $rc -eq 0 ]"
+chk "AC-15 真的执行了（输出含当前目录）" "printf '%s' \"\$out\" | grep -qF \"\$(pwd)\""
+out=$("$NLSH" --no-model --dry-run -c '删除 /tmp/nl_ac15_probe 目录' 2>&1)
+chk "AC-15 高危（rm L3）不走兜底默认参数" "printf '%s' \"\$out\" | grep -q 'rm ' && ! printf '%s' \"\$out\" | grep -q 'lsof'"
 out=$(HOME="$WORK" XDG_DATA_HOME="$WORK/data" "$NLSH" --yes -c '创建一个叫 lazy_fb 的文件夹' 2>&1); rc=$?
 printf '%s\n' "$out" > "$WORK/lazyfb.txt"
 chk "AC-14 模型缺失仍走规则（退出码 0）" "[ $rc -eq 0 ]"

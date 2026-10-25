@@ -9,6 +9,7 @@
 #include "capability_registry.h"
 #include "shell_builtin.h"
 #include "parse_ipc.h"
+#include "decision_cmd.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +38,11 @@ static int g_remote_ok = 1;
 void nl_dispatch_set_remote(int on) { g_remote_ok = on; }
 
 /*
- * 三级解析：本地规则（免费）→ 常驻进程（模型只加载一次）→ 进程内加载（老行为）。
+ * 四级解析（ADR-022）：
+ *   1. 本地规则（免费，0.04s）
+ *   2. 决策层兜底（候选收缩 + 只读默认参数，毫秒级，不加载模型）
+ *   3. 常驻进程（模型只加载一次；实测单次推理仍是 20s 量级）
+ *   4. 进程内加载（老行为）
  * 任何一级失败都不让命令失败，只是退到下一级。
  */
 static int parse_smart(const char *input, NlParseResult *r)
@@ -45,6 +50,11 @@ static int parse_smart(const char *input, NlParseResult *r)
     int rr = nl_parse_rules_only(input, r);
     if (rr == 1) return 0;
     if (rr < 0) return -1;
+
+    /* 决策层兜底：只对 L1 只读能力 + 表内字面量参数生效，见 decision_cmd.c 的安全边界 */
+    if (g_reg && nl_parse_by_decision(input, g_reg, r) == 1) return 0;
+    nl_parse_result_free(r);
+
     if (g_remote_ok) {
         memset(r, 0, sizeof(*r));
         if (nl_parse_remote(input, r, NULL, 0) == 0 && r->command) return 0;

@@ -299,3 +299,11 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/parse_ipc_test.c)
     target_link_libraries(test_parse_ipc PRIVATE nlc)
     add_test(NAME parse_ipc COMMAND test_parse_ipc)
 endif()
+
+# decision_cmd 测试（决策层兜底 + 安全边界）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/decision_cmd_test.c)
+    add_executable(test_decision_cmd unit/decision_cmd_test.c)
+    target_include_directories(test_decision_cmd PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_decision_cmd PRIVATE nlc)
+    add_test(NAME decision_cmd COMMAND test_decision_cmd)
+endif()

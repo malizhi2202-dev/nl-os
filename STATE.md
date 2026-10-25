@@ -6,12 +6,12 @@
 
 ## 当前位置
 
-- **活跃 Change**: `nl-shell-runtime`（**已完成**：`cd` 生效 + 常驻解析进程 + 修模型路径 abort；ctest 33/33、hook 35/35、exec 81/81）
+- **活跃 Change**: `decision-fallback`（**已完成**：规则未命中先走决策层兜底，常见问句 11ms 不加载模型；ctest 34/34、exec 84/84、hook 35/35）
 - **当前阶段**: `nlsh-exec` 已过 7-integration（验收 **81/81**、`ctest` 31/31、四角色通过；确认策略经专家团统一为 ADR-019 并做了全矩阵落地测试），**等用户签核 UAT**
 - **已可安装使用**: `bash scripts/install_local.sh` → `~/.local/bin/nlsh`（模型自动发现，无需 export）
 - **已安装版本**: 23:01 装的含惰性加载的 Release（`列出当前目录下的文件` = 0.04s / 7.6MB；规则未命中仍 1.9s / 677MB，属设计内）。**改完源码必须重跑 `install_local.sh`**，否则用户路径还是旧二进制
 - **终端钩子已装**: `~/.bashrc` 标记块 → `~/.local/share/nl-os/nl-hook.bash`（卸载 `install_local.sh --uninstall-hook`）
-- **当前 Task**: 无未完成项；**已知瓶颈**：规则未命中的单次推理约 20s（模型层，非 IPC）
+- **当前 Task**: 无未完成项；常见规则未命中已由决策层兜底（11ms），**剩下的只余需要路径参数的句子**（仍走 20s 模型或如实拒绝）
 - **当前 Task 补充**: `nl-capability-runtime/UAT.md` 的 12 个场景已由 AI 实跑 12/12（场景 3/4 由本 change 修复）
 - **模型已就位**: `~/.local/share/nl-os/qwen2.5-0.5b-q4_0.gguf`（428MB，Qwen2.5-0.5B-Instruct q4_0）
 - **中断任务**（来自 R1.5 清窗）: 无
@@ -50,6 +50,7 @@
 
 ## 决策日志（最近 10 条，倒序）
 
+- `[2026-10-25]` **决策层兜底（ADR-022）**：规则未命中 → 候选收缩认出工具 → 用**审查过的只读默认参数**执行，不加载模型（`显示当前工作目录` 由 20s/"无法理解" 变成 `pwd` 11ms）；只对 L1 生效、参数为表内字面量、表外不猜——`@.specs/decision-fallback/`
 - `[2026-10-25]` **常驻解析进程 `nlsh --serve`**：模型只加载一次、空闲卸载；只在 TTY 自动拉起；三级回退（规则→常驻→进程内）——`@.specs/adr/021-inferd-daemon.md`。实测省 1.8s/次的加载，但推理 20s 仍是瓶颈
 - `[2026-10-25]` **`cd` 由父 shell 执行**：`bash` 的 `command_not_found_handle` 在子 shell 里跑，钩子 cd 无效 → `nlsh` 写 `__NL_CD__ <dir>`，`PROMPT_COMMAND` 执行 `cd -- "$dir"`（不 eval）——`@.specs/adr/020-shell-builtin-parent-exec.md`
 - `[2026-10-25]` **修模型路径 abort**：decode 分块按 `n_ctx`(512) 而断言要求 `n_batch`(256)，prompt 超 256 token 就 `GGML_ASSERT` 崩（每次调用 `rc=134`）；AC-14 只断言了"加载"没断言"成功"，所以一直没发现

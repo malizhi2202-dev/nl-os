@@ -13,7 +13,8 @@
 #include "path_safety.h"
 
 /* 解析来源 */
-typedef enum { NL_SOURCE_RULE = 0, NL_SOURCE_MODEL = 1 } NlSource;
+/* 解析来源：规则 / 模型 / 决策层兜底（ADR-022） */
+typedef enum { NL_SOURCE_RULE = 0, NL_SOURCE_MODEL = 1, NL_SOURCE_DECISION = 2 } NlSource;
 
 /* 完整解析结果 */
 typedef struct {

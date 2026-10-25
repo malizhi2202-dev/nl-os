@@ -7,28 +7,49 @@
 #include <stdio.h>
 #include <string.h>
 
-/* 词典粗筛：中文动作词 → 能力名（只用于排候选，不做最终判定） */
+/* 词典粗筛：中文动作词 → 能力名（只用于排候选，不做最终判定）
+ *
+ * weight 的作用：区分"泛指"和"特指"。`显示` 这种泛词给 6，`工作目录` 这种特指给 10，
+ * 否则"显示当前工作目录"会在 pwd 和 ls 之间打平（曾导致 pwd 候选丢失）。 */
 typedef struct {
     const char *keyword;
     const char *cap_name;
+    int         weight;
 } NlDecideHint;
 
 static const NlDecideHint HINTS[] = {
-    { "列出", "ls" },   { "查看目录", "ls" },  { "当前目录", "ls" },
-    { "查看", "cat" },  { "内容", "cat" },     { "读取", "cat" },
-    { "创建目录", "mkdir" }, { "文件夹", "mkdir" }, { "新建目录", "mkdir" },
-    { "创建文件", "touch" }, { "空文件", "touch" },
-    { "删除", "rm" },   { "删掉", "rm" },
-    { "移动", "mv" },   { "重命名", "mv" },
-    { "复制", "cp" },   { "拷贝", "cp" },
-    { "查找", "find" }, { "搜索", "find" },   { "找到", "find" },
-    { "进程", "ps" },   { "占用", "ps" },
-    { "压缩", "tar" },  { "打包", "tar" },    { "解压", "tar" },
-    { "下载", "curl" }, { "抓取", "curl" },
-    { "权限", "chmod" },{ "授权", "chmod" },
-    { "磁盘", "df" },   { "空间", "df" },
-    { "帮助", "man" },  { "文档", "man" },
-    { NULL, NULL }
+    /* ── 目录/路径 ── */
+    { "列出", "ls", 8 },        { "查看目录", "ls", 8 },   { "当前目录", "ls", 8 },
+    { "文件列表", "ls", 10 },   { "有哪些文件", "ls", 10 },
+    { "工作目录", "pwd", 10 },  { "当前路径", "pwd", 10 }, { "所在目录", "pwd", 10 },
+    { "在哪个目录", "pwd", 10 },{ "路径", "pwd", 6 },
+    /* ── 文件内容 ── */
+    { "查看", "cat", 6 },       { "内容", "cat", 8 },      { "读取", "cat", 8 },
+    { "创建目录", "mkdir", 8 }, { "文件夹", "mkdir", 8 },  { "新建目录", "mkdir", 8 },
+    { "创建文件", "touch", 8 }, { "空文件", "touch", 10 },
+    { "删除", "rm", 8 },        { "删掉", "rm", 8 },
+    { "移动", "mv", 8 },        { "重命名", "mv", 10 },
+    { "复制", "cp", 8 },        { "拷贝", "cp", 8 },
+    { "查找", "find", 8 },      { "搜索", "find", 8 },     { "找到", "find", 8 },
+    /* ── 进程/资源 ── */
+    { "进程", "ps", 10 },       { "在跑", "ps", 8 },
+    { "内存", "free", 10 },     { "剩余内存", "free", 10 },{ "内存占用", "free", 10 },
+    { "磁盘", "df", 8 },        { "空间", "df", 8 },       { "磁盘空间", "df", 10 },
+    { "磁盘占用", "df", 10 },   { "还剩多少", "df", 6 },
+    { "负载", "uptime", 10 },   { "开机多久", "uptime", 10 },
+    /* ── 系统/身份 ── */
+    { "系统信息", "uname", 10 },{ "内核", "uname", 10 },
+    { "当前用户", "whoami", 10 }, { "我是谁", "whoami", 10 },
+    { "时间", "date", 8 },      { "日期", "date", 8 },
+    { "几点", "date", 10 },     { "现在时间", "date", 10 },
+    /* ── 网络/端口（lsof 是 L1；ss/netstat 未登记 → L4 不放行）── */
+    { "端口", "lsof", 10 },     { "监听", "lsof", 10 },    { "网络连接", "lsof", 10 },
+    /* ── 其它工具 ── */
+    { "压缩", "tar", 8 },       { "打包", "tar", 8 },      { "解压", "tar", 8 },
+    { "下载", "curl", 8 },      { "抓取", "curl", 8 },
+    { "权限", "chmod", 8 },     { "授权", "chmod", 8 },
+    { "帮助", "man", 8 },       { "文档", "man", 8 },
+    { NULL, NULL, 0 }
 };
 
 static int hint_score_for(const char *name, const char *input)
@@ -36,7 +57,7 @@ static int hint_score_for(const char *name, const char *input)
     int score = 0;
     for (int i = 0; HINTS[i].keyword != NULL; i++) {
         if (strcmp(HINTS[i].cap_name, name) != 0) continue;
-        if (strstr(input, HINTS[i].keyword) != NULL) score += 8;
+        if (strstr(input, HINTS[i].keyword) != NULL) score += HINTS[i].weight;
     }
     return score;
 }
