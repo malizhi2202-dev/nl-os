@@ -151,3 +151,18 @@ ADR 里承诺的 DoS 缓解实际不生效。
 2. 下载到 `$FILE.part`，校验通过后再 `mv`，**永远不要先删正式文件**
 3. 校验脚本要在"已经成功"的状态下也跑一遍（幂等路径），不能只测失败路径
 **推广**：任何"失败即清理"的操作，都要先确认被清理的对象不是有效产物。
+
+## 2026-10-25 · Release 构建坏了很久没人发现（验证链只编一个 target）
+
+**症状**：Debug（`-O0`）全绿、`ctest 28/28` 全绿，但 `cmake -DCMAKE_BUILD_TYPE=Release` 直接编译失败：
+`snapshot.c` 两处 `-Werror=format-truncation`、`capability_scan_test.c` 的 `symlink` 未用返回值、
+`adapter_http_test.c` 两处 `freopen` 未用返回值。
+
+**根因**：`verify_all.sh` 只有在"AC-10 资源测量"那一步才建 Release，而且只 `make nlbroker`——
+`nlbroker` 不包含 `snapshot.c`，也不包含测试目标。于是**发布配置从来没有被完整编译过**。
+
+**正确做法**：
+1. 验证脚本必须构建**全部 target** 的 Release（`cmake --build <dir>` 不带 target 名）
+2. `-Wformat-truncation` / `-Wunused-result` 是 **`-O2` 才触发**的警告，Debug 里看不到；
+   凡是"Debug 绿 = 能发布"的推断都不成立
+3. 修法沿用既有约定：`snprintf` 用精度限定符（`%.4000s`）、系统调用返回值必须消费

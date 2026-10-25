@@ -26,6 +26,24 @@
 | T15 | 快照（8MB/敏感/200MB/LRU）+ `--undo` | 含在 `verify_segment3.sh` |
 | T16 | `nlsh --audit` 回放 | `verify_segment3.sh` 16/16 |
 
+## 文档产出（段 2 收尾补齐）
+
+| 文件 | 内容 |
+|---|---|
+| `TEST.md` | AC-1~AC-16 的验证矩阵 + **非功能指标实测（含 3 项未达标）** + 测试环境 |
+| `REVIEW.md` | 段 2 出口四角色评审（4/4 条件通过，2 项条件未闭环）+ 本轮发现并修复的 5 个问题 |
+| `T11b-SUMMARY.md` / `T13-SUMMARY.md` | 实现细节与实测数字 |
+| `DESIGN.md` D19/D20 | 置信度阈值默认 0 的依据、档位→后端映射与降档边界 |
+| `adr/015` 补记 | 后端映射落地 + 分档实测 + 未实现的"P95 自动降档" |
+
+## 本轮顺带修复的既有缺陷
+
+| 缺陷 | 影响 | 修复 |
+|---|---|---|
+| Release 全量构建编不出来（`-Wformat-truncation` ×2、`-Wunused-result` ×3） | 发布配置实际不可用 | `snapshot.c` 精度限定符 + 两处测试返回值检查；`verify_all.sh` 改为构建全量 Release |
+| `--eval` 的 input 未转义 | 含引号输入产生非法 JSON | `json_escape()` |
+| `download_model.sh` 失败退出 0 且会误删已下载模型 | 模型丢失/误判成功 | 幂等校验 + `.part` 临时文件 + 失败退出非 0 |
+
 ## 当前测试规模
 
 ```

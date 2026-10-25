@@ -67,8 +67,9 @@ static void test_live_request(void)
 
     pid_t pid = fork();
     if (pid == 0) {
-        freopen("/dev/null", "w", stdout);
-        freopen("/dev/null", "w", stderr);
+        /* -Werror=unused-result：Release 下 freopen 被标 warn_unused_result */
+        if (!freopen("/dev/null", "w", stdout)) _exit(126);
+        if (!freopen("/dev/null", "w", stderr)) _exit(126);
         execlp("python3", "python3", "-m", "http.server", "18099", "--directory", root,
                (char *)NULL);
         _exit(127);

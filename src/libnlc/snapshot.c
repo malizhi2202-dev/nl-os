@@ -246,7 +246,7 @@ static void enforce_quota(void)
     for (int i = 0; i < n; i++) {
         if (n - i <= keep && total <= max_total) break;
         char path[PATH_MAX];
-        snprintf(path, sizeof(path), "%s/%s", nl_snapshot_root(), names[i]);
+        snprintf(path, sizeof(path), "%.900s/%.60s", nl_snapshot_root(), names[i]);
         long sz = dir_size(path, max_total * 4);
         if (n - i > keep || total - sz >= 0) {
             snapshot_remove_tree(path);
@@ -376,7 +376,7 @@ int nl_snapshot_undo(int n, char *err, size_t errcap)
         if (kind == 'S') continue;              /* 敏感项从未落盘 */
         if (kind == 'F') {
             char parent[PATH_MAX];
-            snprintf(parent, sizeof(parent), "%s", p1);
+            snprintf(parent, sizeof(parent), "%.4000s", p1);
             char *slash = strrchr(parent, '/');
             if (slash) { *slash = '\0'; mkdir_p(parent, 0700); }
             if (copy_file(p2, p1, 0644) == 0) restored++;

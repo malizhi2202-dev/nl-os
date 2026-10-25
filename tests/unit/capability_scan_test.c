@@ -142,7 +142,7 @@ int main(void)
     snprintf(p, sizeof(p), "%s/zzz-tool", g_a);
     touch_file(p, 0755);
     snprintf(p, sizeof(p), "%s/linkx", g_a);
-    symlink("ls", p);
+    if (symlink("ls", p) != 0) { printf("cannot create symlink fixture\n"); return 1; }
 
     snprintf(p, sizeof(p), "%s/ls", g_b);
     touch_file(p, 0755);

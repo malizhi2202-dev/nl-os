@@ -176,9 +176,12 @@ try:
     check("T-FIX-03 invoke rate limited", limited, "no E_POLICY_DENY observed")
 
     # AC-10 资源（Release 构建 + 512MB 地址空间限制）
-    subprocess.run(["cmake","-S",ROOT,"-B",REL,"-DCMAKE_BUILD_TYPE=Release","-DBUILD_TESTING=OFF"],
+    # 注意：这里必须构建**全部 target**。曾经只 make nlbroker，导致 snapshot.c 的
+    # -Wformat-truncation（只在 -O2 触发）与测试里的 -Wunused-result 长期没被发现，
+    # 发布配置实际上编不出来。BUILD_TESTING 打开，让 Release 也覆盖测试目标。
+    subprocess.run(["cmake","-S",ROOT,"-B",REL,"-DCMAKE_BUILD_TYPE=Release","-DBUILD_TESTING=ON"],
                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.run(["make","-C",REL,"-j4","nlbroker"], check=True,
+    subprocess.run(["cmake","--build",REL,"-j4"], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     sock2 = os.path.join(state, "broker-rel.sock")
     mem = subprocess.Popen(["bash","-c",
