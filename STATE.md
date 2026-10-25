@@ -6,11 +6,11 @@
 
 ## 当前位置
 
-- **活跃 Change**: 无（`capability-protocol` 已完成并归档）
-- **活跃 Change**: `nl-capability-runtime`（段 1 完成；段 2 的模型无关部分完成，T11b 等模型；段 3 未开始）
-- **当前阶段**: DEV（**段 1–3 全部完成**；段 3 验收 16/16；仅剩 T11b 等模型）
-- **当前 Task**: T11b（decoder 后端，blocked：本机无 GGUF 模型）
-- **中断任务**（来自 R1.5 清窗）: 无（T06–T08 即将继续）
+- **活跃 Change**: `nl-capability-runtime`（**段 1–3 全部完成，T01–T16 无 blocked 项**）
+- **当前阶段**: INTEGRATION（段 1 12/12、段 2 17/17、段 3 16/16；`ctest` 28/28）
+- **当前 Task**: 无（T11b/T13 已补齐：decoder 接线 + 分档评测）
+- **模型已就位**: `~/.local/share/nl-os/qwen2.5-0.5b-q4_0.gguf`（428MB，Qwen2.5-0.5B-Instruct q4_0）
+- **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
   - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`（CHANGE/REQUIREMENT/DESIGN/TASK/TEST/REVIEW/UAT + 14 个 SUMMARY）
   - 暂停中的 change → `@.specs/nl-capability-runtime/PROGRESS.md`
@@ -31,11 +31,18 @@
 |---|---|---|---|---|
 | 注册表格式冻结 | 决策 | DESIGN 必须先冻结 `format_version` + schema，否则不得拆段 2 任务（架构师条件） | 设计 | 2026-10-25 |
 | ~~ARCHITECTURE.md 缺失~~ | 决策 | ✅ 已裁定：以 ADR-001~018 作为架构文档，不单独维护 | 用户 | 2026-10-25 |
-| 模型常驻进程 | 决策 | 模型放 `nlsh` 进程内 还是 独立 `nl-infer` 守护进程？4GB 档冷启动要从 SD 读 400MB（约 13s），倾向常驻；**段 2 开工前必须定**（ADR-015 只定了内存/延迟预算，没定进程形态） | 用户 | 2026-10-25 |
+| 模型常驻进程 | 决策 | 模型放 `nlsh` 进程内 还是独立 `nl-infer` 守护进程？**现状：进程内**（`nlsh --decide` 每次冷启动约 4s 读 428MB）。是否需要常驻仍待定，取决于目标硬件的 SD 卡读速 | 用户 | 2026-10-25 |
 | 中文 benchmark 规模不足 | 决策 | 现 `models/benchmarks/nl-commands-zh.json` 仅 33 条，计划 1000 条 | 用户 | 2026-10-25 |
-| 模型未部署 | bug | 本机无 `/usr/share/nl-os/model.gguf`，`nlsh` 只能走规则层 | 用户 | 2026-10-25 |
+| ~~模型未部署~~ | bug | ✅ 已部署到 `~/.local/share/nl-os/`（`NL_MODEL_PATH` 指定）；`download_model.sh` 默认写 `/usr/share/nl-os` 会权限失败且**仍退出 0**（已知缺陷） | 用户 | 2026-10-25 |
+| 决策层延迟未达标 | bug | 本机 P50 1493ms / P95 2788ms，超 B 档 1.5s 目标；根因是 2 vCPU + 内存余量 300MB。需换硬件复测或做 prefix cache | 用户 | 2026-10-25 |
+| 候选漏救 33% | bug | 100 条可判定输入中 33 条正确能力未进候选（平均候选 0.85）；扩词典属 T10 后续 | 用户 | 2026-10-25 |
+| C 档未验证 | 决策 | 无 3B–7B GGUF，ADR-015 的 C 档承诺仍为"未验证设计目标" | 用户 | 2026-10-25 |
 
 ## 决策日志（最近 10 条，倒序）
+
+- `[2026-10-25]` **T11b 完成**：decoder 后端接线（档位→后端、GBNF 受约束 Choice、输出只认候选集内 id）；模型在候选集内把准确率从规则 top-1 的 91.0% 提到 **98.5%**（66/67）
+- `[2026-10-25]` **置信度阈值默认改为 0（关闭）**：实测 0.5 会丢掉 53% 的正确回答且准确率反而更低（85.7%→80.6%）——该指标无区分度，见 T13-SUMMARY B6
+- `[2026-10-25]` **T13 分档评测**：A1(模拟) 79.2% / B(本机 0.5B) 85.7% / C 未测；瓶颈确认在候选召回（漏救 33%）而非模型选择
 
 - `[2026-10-25]` 永久放弃 `.nl` 完整编程语言，NL-C 收敛为 `.tools` — `@.specs/adr/011-drop-nl-language.md`
 - `[2026-10-25]` `.specs/` 纳入版本控制（此前被 `.gitignore` 忽略，TASK/ADR/SUMMARY 均未入库）

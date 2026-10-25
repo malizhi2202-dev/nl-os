@@ -50,6 +50,25 @@ const NlModelInfo *nl_model_get_info(const NlModel *model);
 int nl_model_infer(NlModel *model, const char *prompt, char *output, size_t max_len);
 
 /*
+ * 受 GBNF 约束的推理（T11b）：语法只允许特定字面量，模型无从生成其它内容。
+ * grammar 为 GBNF 文本，root 规则名固定为 "root"。
+ * 返回: 实际输出的字节数，失败返回 -1
+ */
+int nl_model_infer_grammar(NlModel *model, const char *prompt, const char *grammar,
+                           char *output, size_t max_len);
+
+/* 最近一次推理的置信度（0-1，grammar 掩码后各 token 概率的几何平均）；
+ * 未推理或无法归一化返回 -1 */
+double nl_model_last_confidence(const NlModel *model);
+
+/*
+ * 用模型的 chat 模板渲染 system+user（模型无模板时回退 Qwen ChatML）
+ * 返回: 写入长度，失败返回 -1
+ */
+int nl_model_format_chat(NlModel *model, const char *system, const char *user,
+                         char *out, size_t cap);
+
+/*
  * 释放模型资源
  */
 void nl_model_free(NlModel *model);

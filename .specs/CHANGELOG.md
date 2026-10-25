@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-10-25 · nl-capability-runtime 段 2 收尾 — decoder 接线 + 分档评测（T11b/T13）
+
+**新增**
+
+- `libnlc/decision_model.c`：把"模型相关"隔离出决策层——档位→后端映射、Choice prompt、
+  受约束解码（GBNF 只枚举候选 + `<refuse>`）、输出解析、置信度阈值
+- `model_loader` 补齐：`nl_model_infer_grammar()`（`llama_sampler_init_grammar`）、
+  `nl_model_format_chat()`（模型自带 chat 模板 + ChatML 回退）、`nl_model_last_confidence()`、
+  `n_batch=256`、每次推理前清 KV、`n_threads` 按实际核数
+- `nlsh --decide <自然语言>`：只决策不执行，输出 chosen/method/tier/backend/candidates
+- `nlsh --eval <评测集>`：逐条决策 + 汇总（`schema_violations` / `fallbacks` / `accuracy` / P50 / P95）
+- `scripts/verify_segment2.sh`：AC-6~AC-10 共 17 条断言
+- `tests/unit/decision_model_test.c`：档位映射 / prompt 完整性 / 输出解析 / 有模型时的准确率与延迟
+
+**行为变更**
+
+- 档位自降档接线：A1（≤1GB）不加载 decoder；模型缺失或解码失败降档到规则并落审计
+- **低置信度阈值默认由 0.5 改为 0（关闭）**：实测该指标无区分度（阈值 0→0.5 时准确率 85.7%→80.6%，
+  却丢掉 53% 正确回答）。`NL_DECIDE_MIN_CONF` 仍可开启
+
+**实测（同批 120 条中文指令）**
+
+- 受约束解码在候选集内 **66/67 = 98.5%**，规则 top-1 同口径 61/67 = 91.0%
+- 分档：A1(模拟) 79.2% / B(本机 2 vCPU, 0.5B q4_0) 85.7%·P50 1493ms·P95 2788ms / C 未测
+- 瓶颈确认在候选召回（漏救 33%，平均候选 0.85），不在模型选择
+
 ## 2026-10-25 · capability-protocol — 统一能力调用协议（CIP v1）+ 本地 broker
 
 **新增**

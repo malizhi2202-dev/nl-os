@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <math.h>
 
 #ifdef GGML_USE_CPU
 #include <llama.h>
@@ -20,6 +22,10 @@ struct NlModel {
     struct llama_model   *llama_model;
     struct llama_context *llama_ctx;
     const struct llama_vocab *vocab;
+    /* 最近一次推理的置信度：grammar 掩码后各 token 概率的几何平均 */
+    double conf_sum;
+    int    conf_n;
+    double confidence;
 #endif
 };
 
@@ -39,7 +45,14 @@ NlModel *nl_model_init(const char *path) {
     if (!m->llama_model) { free(m); return NULL; }
 
     struct llama_context_params cp = llama_context_default_params();
-    cp.n_ctx = 512; cp.n_batch = 1;
+    cp.n_ctx = 512;
+    cp.n_batch = 256;    /* prefill 批处理；n_batch=1 会把 prompt 处理拖成逐 token */
+    /* 线程数按实际核数（上限 8）：默认值在少核机器上会过订阅，反而更慢 */
+    long cores = sysconf(_SC_NPROCESSORS_ONLN);
+    int nt = (cores > 0) ? (int)cores : 1;
+    if (nt > 8) nt = 8;
+    cp.n_threads = nt;
+    cp.n_threads_batch = nt;
     m->llama_ctx = llama_init_from_model(m->llama_model, cp);
     if (!m->llama_ctx) { llama_model_free(m->llama_model); free(m); return NULL; }
 
@@ -52,8 +65,40 @@ NlModel *nl_model_init(const char *path) {
 
 const NlModelInfo *nl_model_get_info(const NlModel *m) { return m ? &m->info : NULL; }
 
-int nl_model_infer(NlModel *m, const char *prompt, char *output, size_t max_len) {
+/* 每次推理前清空 KV：REPL 场景下不能复用上一次的上下文 */
+static void clear_kv(NlModel *m)
+{
+    if (!m || !m->llama_ctx) return;
+    llama_memory_t mem = llama_get_memory(m->llama_ctx);
+    if (mem) llama_memory_clear(mem, true);
+}
+
+/* 记录选中 token 的对数概率（grammar 掩码后）：用于 AC-6 的 probability 字段 */
+static void record_conf(NlModel *m, llama_token tid)
+{
+    float *logits = llama_get_logits_ith(m->llama_ctx, -1);
+    int n = llama_vocab_n_tokens(m->vocab);
+    if (!logits || n <= 0 || tid < 0 || tid >= n) return;
+
+    float mx = logits[0];
+    for (int i = 1; i < n; i++) if (logits[i] > mx) mx = logits[i];
+    if (isinf(mx) && mx < 0) return;   /* 全被掩码：无法归一化 */
+    double sum = 0.0;
+    for (int i = 0; i < n; i++) sum += exp((double)(logits[i] - mx));
+    if (!(sum > 0.0)) return;
+    m->conf_sum += (double)(logits[tid] - mx) - log(sum);
+    m->conf_n++;
+}
+
+static int infer_impl(NlModel *m, const char *prompt, const char *grammar,
+                      char *output, size_t max_len)
+{
     if (!m || !output || max_len == 0) return -1;
+
+    clear_kv(m);
+    m->conf_sum = 0.0;
+    m->conf_n = 0;
+    m->confidence = -1.0;
 
     /* Tokenize */
     llama_token tokens[1024];
@@ -62,24 +107,33 @@ int nl_model_infer(NlModel *m, const char *prompt, char *output, size_t max_len)
 
     /* Decode prompt */
     uint32_t n_ctx = llama_n_ctx(m->llama_ctx);
+    /* prompt 超出上下文窗口：直接失败，不要靠 decode 报错（会留下半截 KV） */
+    if (n > (int)n_ctx) return -1;
     for (int pos = 0; pos < n; pos += (int)n_ctx) {
         int batch = (n - pos > (int)n_ctx) ? (int)n_ctx : (n - pos);
         if (llama_decode(m->llama_ctx, llama_batch_get_one(tokens + pos, batch)) != 0)
             return -1;
     }
 
-    /* Setup greedy sampler */
     struct llama_sampler_chain_params sparams = llama_sampler_chain_default_params();
     struct llama_sampler *smpl = llama_sampler_chain_init(sparams);
+    if (grammar && grammar[0]) {
+        struct llama_sampler *g = llama_sampler_init_grammar(m->vocab, grammar, "root");
+        if (!g) {
+            /* 语法解析失败：退回贪心，避免整条链路失败 */
+        } else {
+            llama_sampler_chain_add(smpl, g);
+        }
+    }
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
-    /* Generate */
     char *out = output;
     size_t rem = max_len - 1;
     int total = 0;
     for (int i = 0; i < 128 && rem > 0; i++) {
         llama_token tid = llama_sampler_sample(smpl, m->llama_ctx, -1);
         if (llama_vocab_is_eog(m->vocab, tid)) break;
+        record_conf(m, tid);
         char buf[16];
         int cn = llama_token_to_piece(m->vocab, tid, buf, (int)sizeof(buf), 0, 1);
         if (cn < 0) break;
@@ -90,7 +144,56 @@ int nl_model_infer(NlModel *m, const char *prompt, char *output, size_t max_len)
     }
     *out = '\0';
     llama_sampler_free(smpl);
+    if (m->conf_n > 0) m->confidence = exp(m->conf_sum / (double)m->conf_n);
     return total;
+}
+
+int nl_model_infer(NlModel *m, const char *prompt, char *output, size_t max_len)
+{
+    return infer_impl(m, prompt, NULL, output, max_len);
+}
+
+int nl_model_infer_grammar(NlModel *m, const char *prompt, const char *grammar,
+                           char *output, size_t max_len)
+{
+    if (!grammar || !grammar[0]) return -1;
+    return infer_impl(m, prompt, grammar, output, max_len);
+}
+
+double nl_model_last_confidence(const NlModel *m)
+{
+    return m ? m->confidence : -1.0;
+}
+
+int nl_model_format_chat(NlModel *m, const char *system, const char *user,
+                         char *out, size_t cap)
+{
+    if (!m || !out || cap == 0) return -1;
+    const char *sys = system ? system : "";
+    const char *usr = user ? user : "";
+
+    const char *tmpl = llama_model_chat_template(m->llama_model, NULL);
+    if (tmpl) {
+        llama_chat_message msgs[2] = { { "system", sys }, { "user", usr } };
+        int32_t need = llama_chat_apply_template(tmpl, msgs, 2, true, out, (int32_t)cap);
+        if (need > 0 && (size_t)need < cap) return need;
+        if (need > 0) {
+            char *buf = malloc((size_t)need + 1);
+            if (!buf) return -1;
+            int32_t got = llama_chat_apply_template(tmpl, msgs, 2, true, buf, need + 1);
+            int ok = (got > 0 && (size_t)got < cap);
+            if (ok) memcpy(out, buf, (size_t)got);
+            free(buf);
+            return ok ? got : -1;
+        }
+        return -1;
+    }
+
+    /* 回退：Qwen ChatML */
+    int n = snprintf(out, cap,
+                     "<|im_start|>system\n%s<|im_end|>\n<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n",
+                     sys, usr);
+    return (n > 0 && (size_t)n < cap) ? n : -1;
 }
 
 void nl_model_free(NlModel *m) {
@@ -125,4 +228,11 @@ int nl_model_infer(NlModel *m,const char *prompt,char *output,size_t max_len) {
     memcpy(output,r,l); output[l]='\0'; (void)prompt; return (int)l;
 }
 void nl_model_free(NlModel *m) { if(!m)return; if(m->file)fclose(m->file); free(m); }
+int nl_model_infer_grammar(NlModel *m,const char *prompt,const char *grammar,char *output,size_t max_len){
+    (void)m;(void)prompt;(void)grammar;(void)output;(void)max_len;return -1;
+}
+int nl_model_format_chat(NlModel *m,const char *system,const char *user,char *out,size_t cap){
+    (void)m;(void)system;(void)user;(void)out;(void)cap;return -1;
+}
+double nl_model_last_confidence(const NlModel *m){ (void)m; return -1.0; }
 #endif

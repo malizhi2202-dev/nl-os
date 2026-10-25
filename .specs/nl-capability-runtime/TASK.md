@@ -260,9 +260,9 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
 |---|---|---|---|
 | T10 | 候选收缩：**embedding 语义粗筛**（A 档主力）+ 规则兜底 → top-K=8，统计粗筛命中率/漏救率 | AC-6 前置 | blocked（待 T08 冻结） |
 | T11a | GBNF Choice 语法构造 + 开销实测（2.5µs/次） | AC-6, AC-10 | ✅ done |
-| T11b | decoder 后端接线（加载模型 + 约束解码 + 按画像选后端） | AC-6, AC-10 | 🔒 blocked：本机无 GGUF 模型 |
+| T11b | decoder 后端接线（加载模型 + 约束解码 + 按画像选后端） | AC-6, AC-10 | ✅ done |
 | T12 | Noul 三档 + 单调性（模型只能更严格） | AC-7, AC-8 | ✅ done |
-| T13 | 后端自降档 + **分档评测**（A/B/C 各一份准确率与 P95 延迟）+ 中文集扩到 100+ | AC-9, AC-6 | blocked |
+| T13 | 后端自降档 + **分档评测**（A/B/C 各一份准确率与 P95 延迟）+ 中文集扩到 100+ | AC-9, AC-6 | ✅ done（C 档无硬件，显式标注未验证） |
 | T14 | `.tools` 固化与校验（SHA-256 链式哈希 + 篡改拒绝） | AC-11~AC-13 | ✅ done |
 | T15 | 快照（8MB/敏感排除/200MB/LRU）+ `--undo` | AC-14, AC-15 | ✅ done |
 | T16 | `nlsh --audit`（回放，复用 nl_audit_query） | AC-16 | ✅ done |
@@ -278,7 +278,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
 | AC-3 快路径 | T06 | `NL_MODEL_PATH=/nonexistent nlsh -c 'ls -la'` + 审计字段 |
 | AC-4 能力缺失不猜 | T07 | `nlsh -c '重启 nginx'` 断言无命令输出 |
 | AC-5 预算拒绝 | T05 + T07 | `ctest -R budget` + 脚本断言 `refused` |
-| AC-6~AC-10 | T10–T13 | 待段 2 |
+| AC-6~AC-10 | T10–T13 | `scripts/verify_segment2.sh`（17 断言） |
 | AC-11~AC-16 | T14–T16 | 待段 3 |
 
 ---

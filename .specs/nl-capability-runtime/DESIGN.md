@@ -26,7 +26,7 @@
 | ADR-003 `.tools` | 向后兼容扩展：新增 `# @format/@checksum/@cap` 头；无头文件按 v1 解析 |
 | ADR-007 模块边界 | 新增 3 个模块（capability_registry / decision / freeze+snapshot），接口归属 `libnlc`，`nlsh` 不得私有持有 |
 | ADR-008 Agent 架构 | **推翻**（见 ADR-013） |
-| 一期 `DESIGN.md` 的 CLI 契约 | 不改：`nlsh [-c] [--dry-run] [--verbose] [--no-model]`，新增 `--scan` / `--self-test` / `--eval` / `--freeze` / `--undo` / `--audit` 子命令 |
+| 一期 `DESIGN.md` 的 CLI 契约 | 不改：`nlsh [-c] [--dry-run] [--verbose] [--no-model]`，新增 `--scan` / `--self-test` / `--eval` / `--decide` / `--freeze` / `--undo` / `--audit` 子命令 |
 
 ---
 
@@ -42,6 +42,8 @@
 | **D16** | 校验和用**内置 SHA-256**，逐行链式 hash 定位篡改行 | OpenSSL / CRC / FNV | 依赖上限；能定位首个差异行 | 新增约 150 行安全相关代码，无密钥、不防恶意重算 |
 | **D17** | 快照：仅 L2/L3、单文件 ≤8MB、敏感清单排除、总上限 200MB、保留 10 次、`flock` 互斥 | 全量快照 / reflink / 不设限 | 端侧存储有限；敏感内容不得落盘 | 大文件操作不可撤销，需在提示中明说 |
 | **D18** | 决策层可整体禁用，降级到规则预算；降级路径**必须有测试** | 模型必需 | OpenWrt 档跑不了模型 | 功能被分成两档，评测需覆盖两档 |
+| **D19** | 低置信度**机制保留、默认阈值 0（关闭）**：`p < NL_DECIDE_MIN_CONF` 时只列 top-3、不产生命令 | 默认 0.5 / 不实现 | 实测该指标无区分度：阈值 0→0.5 时接受样本准确率 85.7%→80.6%（反而下降），却丢掉 53% 的正确回答。有区分度的拒答信号是"候选为空"与模型 `<refuse>`。开关保留给"宁可少做"的场景 | AC-8 的数值语义默认不生效；真正的置信度需要"候选间相对概率"（K 次前向），列入遗留 |
+| **D20** | 后端按档位选定并**运行期降档**：A1→`embedding`（decoder 不上）、A2/B/C→`decoder`、模型缺失或解码失败→`rules` | 全档统一 decoder / 按档发不同二进制 | ADR-015 的内存与延迟预算；A1 512MB 上 0.35B 会 OOM | 同一输入在不同机器/时刻可能走不同后端，必须靠审计 `method` 字段解释 |
 
 ---
 
@@ -77,6 +79,7 @@
 | `libnlc/capability_scan.c` | 白名单目录扫描、`lstat` 校验、systemd 发现（可选） | `nl_cap_scan(opts, out)` |
 | `libnlc/capability_registry.c` | 读写 JSONL、`format_version` 校验、并发锁、增量判定、ID 查询 | `nl_cap_load()`, `nl_cap_save_atomic()`, `nl_cap_find(id)` |
 | `libnlc/decision.c` | 候选收缩、GBNF 构造、Choice/Score/Noul、降级 | `nl_decide(input, K, out)` |
+| `libnlc/decision_model.c` | **模型相关部分隔离**：档位→后端映射、Choice prompt、受约束解码、输出解析、置信度阈值 | `nl_backend_for_tier()`, `nl_choose_with_model()`, `nl_choose_parse()`, `nl_choose_min_conf()` |
 | `libnlc/freeze.c` | `.tools` 头解析、逐行链式 hash、固化生成 | `nl_freeze_write()`, `nl_freeze_verify()` |
 | `libnlc/snapshot.c` | 快照写入、敏感排除、LRU、撤销 | `nl_snapshot_take()`, `nl_snapshot_undo(n)` |
 | `libnlc/audit.c` | 结构化审计 JSONL（与 `nl-perm/audit_log.c` 的 syslog 并存，职责不同、不互相替代） | `nl_audit_emit(rec)` |

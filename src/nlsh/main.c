@@ -6,6 +6,9 @@
 #include "capability_scan.h"
 #include "audit.h"
 #include "snapshot.h"
+#include "decision.h"
+#include "decision_model.h"
+#include "nl_eval.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +20,113 @@ static void print_usage(void) {
     printf("nlsh - NL-Shell\n");
     printf("用法: nlsh [--dry-run] [--verbose] [--no-model] [--registry PATH]\n");
     printf("           [--scan] [--self-test] [--audit] [--undo [N]] [-c cmd]\n");
+    printf("           [--decide 自然语言]   只做决策（候选收缩 + 受约束 Choice），不执行\n");
+    printf("           [--eval FILE]         跑中文评测集，输出逐条决策 + 汇总\n");
+    printf("环境变量: NL_MODEL_PATH / NL_TIER(1-4，覆盖档位探测)\n");
 }
+/* 档位探测：NL_TIER 可覆盖（容器/cgroup 会误判，ADR-015 要求允许人工覆盖） */
+static int nl_resolve_tier(void) {
+    const char *ov = getenv("NL_TIER");
+    if (ov && ov[0]) { int t = atoi(ov); if (t >= 1 && t <= 4) return t; }
+    return nl_tier_from_bytes(nl_total_ram_bytes());
+}
+
+static const char *nl_backend_name(NlBackend b) {
+    switch (b) {
+    case NL_BACKEND_LLM:       return "decoder";
+    case NL_BACKEND_EMBEDDING: return "embedding";
+    default:                   return "rules";
+    }
+}
+
+/* --decide：只决策不执行。候选收缩 → 按档位选后端 → 受约束 Choice（可选） */
+static int run_decide(const char *reg_path, const char *input, int no_model) {
+    NlCapRegistry *reg = nl_cap_load(reg_path, NULL);
+    if (!reg) reg = nl_cap_create();
+    if (!reg) { fprintf(stderr, "nlsh: 无法加载注册表\n"); return 1; }
+    if (nl_cap_count(reg) == 0) {
+        fprintf(stderr, "nlsh: 注册表为空，先跑 nlsh --scan\n");
+        nl_cap_free(reg);
+        return 1;
+    }
+
+    NlCandidates c;
+    if (nl_decide_candidates(input, reg, &c) != 0) {
+        fprintf(stderr, "nlsh: 候选收缩失败\n");
+        nl_cap_free(reg);
+        return 1;
+    }
+    int tier = nl_resolve_tier();
+    NlBackend be = nl_backend_for_tier(tier);
+
+    char chosen[NL_CAP_MAX_ID_LEN] = "";
+    const char *method = "none";
+    const char *status = "refused";
+
+    if (c.count == 0) {
+        method = "no-candidate";
+    } else if (be == NL_BACKEND_LLM && !no_model) {
+        const char *mp = getenv("NL_MODEL_PATH");
+        if (!mp || !mp[0]) mp = "/usr/share/nl-os/model.gguf";
+        NlModel *m = nl_model_init(mp);
+        if (!m) {
+            /* 模型缺席：降档到规则 top-1，不阻塞 */
+            snprintf(chosen, sizeof(chosen), "%s", c.items[0].id);
+            method = "rule-fallback";
+            status = "ok";
+        } else {
+            NlChoiceStatus st = nl_choose_with_model(m, input, &c, chosen, sizeof(chosen));
+            nl_model_free(m);
+            if (st == NL_CHOICE_OK)       { method = "choice-llm";  status = "ok"; }
+            else if (st == NL_CHOICE_REFUSE) { method = "model-refuse"; }
+            else if (st == NL_CHOICE_UNCERTAIN) { method = "low-confidence"; }
+            else {
+                /* 解码失败同样降档：宁可走规则，也不猜 */
+                snprintf(chosen, sizeof(chosen), "%s", c.items[0].id);
+                method = "rule-fallback";
+                status = "ok";
+            }
+        }
+    } else {
+        snprintf(chosen, sizeof(chosen), "%s", c.items[0].id);
+        /* --no-model 时明确走规则，不当成 embedding 档 */
+        method = (be == NL_BACKEND_EMBEDDING) ? "rule-narrowed" : "rule";
+        status = "ok";
+    }
+
+    char cands[1024];
+    size_t used = 0;
+    cands[0] = '\0';
+    for (int i = 0; i < c.count && used + 3 < sizeof(cands); i++) {
+        int n = snprintf(cands + used, sizeof(cands) - used, "%s\"%s\"",
+                         i ? "," : "", c.items[i].id);
+        if (n < 0 || (size_t)n >= sizeof(cands) - used) break;
+        used += (size_t)n;
+    }
+
+    printf("{\"status\":\"%s\",\"chosen\":\"%s\",\"method\":\"%s\","
+           "\"tier\":%d,\"backend\":\"%s\",\"candidates\":[%s]}\n",
+           status, chosen, method, tier, nl_backend_name(be), cands);
+
+    NlAuditRec r;
+    memset(&r, 0, sizeof(r));
+    r.capability_id = chosen[0] ? chosen : NULL;
+    r.perm_level = 0;
+    r.verdict = "allow";
+    r.effect = "read";
+    r.fast_path = (method[0] == 'r');   /* rule* 走快路径；choice-llm 不算 */
+    r.probability = -1;
+    r.duration_us = 0;
+    r.result = status;
+    r.reason = method;
+    r.input = input;
+    r.corr = "";
+    (void)nl_audit_emit(&r);
+
+    nl_cap_free(reg);
+    return strcmp(status, "ok") == 0 ? 0 : 3;
+}
+
 int main(int argc, char **argv) {
     int dry_run=0,verbose __attribute__((unused)) =0,no_model=0;
     int do_scan=0, do_selftest=0, do_audit=0, do_undo=0;
@@ -26,6 +135,8 @@ int main(int argc, char **argv) {
     int audit_limit = 20;
     const char *registry_path=NULL;
     char *cmd=NULL;
+    const char *decide_input=NULL;
+    const char *eval_path=NULL;
     for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
         else if(strcmp(argv[i],"--registry")==0&&i+1<argc)registry_path=argv[++i];
         else if(strcmp(argv[i],"--scan")==0)do_scan=1;
@@ -36,7 +147,9 @@ int main(int argc, char **argv) {
             if(i+1<argc && argv[i+1][0]>='1' && argv[i+1][0]<='9') undo_n=atoi(argv[++i]);
         }
         else if(strcmp(argv[i],"--since")==0&&i+1<argc)audit_since=atol(argv[++i]);
-        else if(strcmp(argv[i],"--limit")==0&&i+1<argc)audit_limit=atoi(argv[++i]); else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
+        else if(strcmp(argv[i],"--limit")==0&&i+1<argc)audit_limit=atoi(argv[++i]);
+        else if(strcmp(argv[i],"--decide")==0&&i+1<argc)decide_input=argv[++i];
+        else if(strcmp(argv[i],"--eval")==0&&i+1<argc)eval_path=argv[++i]; else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
     signal(SIGINT,sigint_handler);
     nl_history_init(getenv("HOME")?strcat(strcpy(malloc(256),getenv("HOME")),"/.nlsh_history"):NULL);
 
@@ -92,9 +205,19 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+
+    if (eval_path) return nl_eval_run(reg_path, eval_path);
+    if (decide_input) return run_decide(reg_path, decide_input, no_model);
+
     if(!no_model) {
-        const char *mp=getenv("NL_MODEL_PATH"); if(!mp)mp="/usr/share/nl-os/model.gguf";
-        if(nl_init(mp)!=0&&!no_model) fprintf(stderr,"⚠️ 模型加载失败，仅规则引擎可用\n");
+        int tier = nl_resolve_tier();
+        NlBackend be = nl_backend_for_tier(tier);
+        if (be == NL_BACKEND_EMBEDDING) {
+            fprintf(stderr,"ℹ️ 档位 %d：decoder 未启用（仅规则/向量粗筛）\n", tier);
+        } else {
+            const char *mp=getenv("NL_MODEL_PATH"); if(!mp)mp="/usr/share/nl-os/model.gguf";
+            if(nl_init(mp)!=0) fprintf(stderr,"⚠️ 模型加载失败，降档到规则引擎\n");
+        }
     }
 
     NlCapRegistry *reg = nl_cap_load(reg_path, NULL);

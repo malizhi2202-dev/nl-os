@@ -234,6 +234,17 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/benchmark_test.c)
     add_test(NAME benchmark COMMAND test_benchmark)
 endif()
 
+# 解码后端 + 受约束 Choice（T11b/T13 · nl-capability-runtime 段 2）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/decision_model_test.c)
+    add_executable(test_decision_model unit/decision_model_test.c)
+    target_include_directories(test_decision_model PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_compile_definitions(test_decision_model PRIVATE
+        BENCHMARK_PATH="${CMAKE_SOURCE_DIR}/models/benchmarks/nl-commands-zh-v2.json")
+    target_link_libraries(test_decision_model PRIVATE nlc cjson)
+    add_test(NAME decision_model COMMAND test_decision_model)
+endif()
+
 # .tools 固化（T14）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/freeze_test.c)
     add_executable(test_freeze unit/freeze_test.c)
