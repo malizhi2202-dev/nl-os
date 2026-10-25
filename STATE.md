@@ -19,8 +19,8 @@
 
 | 欠账 | 阶段要求 | 现状 | 补救 |
 |---|---|---|---|
-| Task 门未跑 | 3-task 出口门（4 角色投票） | TASK.md 无门禁记录 | 补跑并记录 |
-| CONTEXT.md 未更新域语言 | 1-requirement「提取域语言」 | CIP/ticket/verdict 等术语 0 条 | 补 10–12 条术语 + 决策 |
+| ~~Task 门未跑~~ | 3-task 出口门 | ✅ 已补跑（3/4，含 verify fallback 条件，已落地） | 完成 2026-10-25 |
+| ~~CONTEXT.md 未更新域语言~~ | 1-requirement「提取域语言」 | ✅ 已补 13 条术语 + 4 条决策 | 完成 2026-10-25 |
 | REQUIREMENT/DESIGN 未经用户逐份确认 | 人机边界④把关 | 三道门均为 AI 自评（3/4） | 出「方案确认清单」交用户逐条确认 |
 | ARCHITECTURE.md 缺失 | 0.4 架构级变更沉淀 | 仍不存在 | 评估是否跑 A-architect |
 

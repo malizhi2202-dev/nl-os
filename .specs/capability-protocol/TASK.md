@@ -73,6 +73,7 @@ W5 HTTP+收口    T13[P] → T14                  │
     4. 按 `\n` 分帧（单行上限 1MB，超限断开）；每行交 `nl_cip_parse` → 分发
     5. `discover` 先返回空能力表（注册表在 T03 接）
     6. SIGTERM/SIGINT 优雅退出并删除 socket
+    7. **verify fallback**：`nc` 不存在时改用 `python3 -c 'import socket,sys;s=socket.socket(socket.AF_UNIX);s.connect("/tmp/t.sock");s.sendall(b"{...}\n");print(s.recv(4096).decode())'`
   </action>
   <verify>cd build && make -j$(nproc) && ./src/nlbroker/nlbroker --socket /tmp/t.sock & sleep 0.3; printf '{"v":1,"id":"1","op":"discover"}\n' | nc -U /tmp/t.sock; stat -c '%a' /tmp/t.sock</verify>
   <done>discover 返回 ok=true 且 capabilities 为数组；socket 权限为 600；SIGTERM 后 socket 文件被删除</done>
@@ -345,6 +346,7 @@ W5 HTTP+收口    T13[P] → T14                  │
     2. **AC-5 对抗脚本**：构造 `{"effect":"read"}` 伪装的 `rm`，必须 deny 且审计标记
     3. **AC-10 资源**：在 `systemd-run --scope -p MemoryMax=512M` 下跑 broker，读 `VmHWM` ≤ 80MB
     4. 全量 `ctest` + 脚本全绿后写 `UAT.md`
+    5. **verify fallback**：无 `systemd-run` 时改用 `bash -c 'ulimit -v 524288; exec build/nlbroker --dry-run'`，并在 `UAT.md` 标注"该门限需在 A1 档目标硬件复测"
   </action>
   <verify>bash scripts/verify_all.sh && cd build && ctest --output-on-failure</verify>
   <done>10 条 AC 全绿；ctest 全绿；UAT.md 贴出每条 AC 的实跑输出</done>
@@ -383,3 +385,39 @@ W5 HTTP+收口    T13[P] → T14                  │
 ---
 
 > `read_files` / `write_files` 是 R7.3 强约束；4-dev 提交前 `git diff --name-only` 比对边界。
+
+---
+
+## 🛡️ Task 门投票记录（2026-10-25，三轮 · 补跑）
+
+> 背景：T01 完成后自查发现 3-task 的出口门遗漏，现补跑。结论对 T01 的粒度校准仍然有效。
+
+**第 1 轮 · 行业对照**：MCP 规范的演进经验是"适配器模式 + 每个适配器独立契约测试"；Rust/Go 生态的同类项目（Napaxi、PhoneBuddySDK）也都是"核心引擎 + 各后端适配器"。当前拆分（W1 核心 → W2 端到端 → W3/W4/W5 各自适配器）与该模式一致。
+
+**第 2 轮 · 粒度与可执行性核查**：
+
+- T01 实际耗时**超过 10 分钟**（编解码 + 7 个测试 + CMake 接入）——粒度校准：后续适配器任务预计同样接近上限，**不允许再合并两个适配器到一个任务**。
+- **T02 的 verify 依赖 `nc`**，最小系统（OpenWrt 默认镜像）不一定有。
+- **T14 的 verify 依赖 `systemd-run`**，容器/无 systemd 环境不可用。
+
+**第 3 轮 · 交叉验证**：
+
+- 安全 → 架构：`T04`（裁决）与 `T05`（ticket）顺序正确——先有 verdict 才有 ticket；但要注意 fail-closed 不能在 T04 未就绪时被绕过，已由 T08 集成负责。
+- 架构 → PM：14 个任务对 10 条 AC 的覆盖矩阵已逐条对齐，无遗漏。
+- PM → 架构：T08 同时承担"集成"与"AC 脚本"，失败时会阻塞 W3–W5；接受该风险（因为 W3–W5 本就依赖 T08 的 dispatch）。
+
+```
+🟫 高级产品经理:  ✅ 覆盖矩阵逐条对齐 AC，无遗漏
+🟦 资深用户评测员: ✅ 每个任务都有用户可感知的验证点（能跑、能拒、能回放）
+🟩 架构师:        ❌ 反对验证命令的可移植性：T02 依赖 nc、T14 依赖 systemd-run。
+                     条件：两处 verify 必须给出 fallback（python3 socket / ulimit -v 或无 root 方案）
+🔴 安全审计师:    ✅ T04→T05 顺序正确；T14 的对抗用例与资源门限都在
+
+结果: 3/4 → 多数通过 ✅（记录架构师反对意见，条件：补 verify fallback）
+```
+
+### 补跑后立即执行的条件（已在本文件落地）
+
+1. **T02 verify 增加 fallback**：`nc` 不存在时用 `python3 -c` 的 socket 客户端（见 T02 action 第 7 条）
+2. **T14 verify 增加 fallback**：无 `systemd-run` 时改用 `ulimit -v` 或标注"需目标档硬件复测"
+3. **粒度锁定**：T06/T09/T11/T13 每个只做一个适配器，不得合并

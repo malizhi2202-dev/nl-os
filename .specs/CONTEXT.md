@@ -60,6 +60,19 @@ NL-OS 是一个**自然语言驱动的操作系统交互层**。目标是把「�
 | **拒绝语义（refused）** | 明确返回"解析不了 + 超出的维度 + 可执行替代步骤"，是产品能力而非缺陷。 |
 | **快照 / 撤销** | L2/L3 操作前的状态备份与 `--undo` 恢复；敏感路径不产生快照。 |
 | **校验和头** | 固化 `.tools` 头部的 `# @checksum:`，执行前校验，不匹配即拒绝。 |
+| **CIP** | Capability Invocation Protocol。本地统一能力调用协议，JSON Lines over Unix socket。五条报文：`discover / describe / invoke / commit / audit`。 |
+| **能力命名空间** | 能力 ID 的前缀：`cli:` / `dbus:` / `mcp:` / `http:`。换执行面只换前缀，协议不变。 |
+| **两阶段调用** | `invoke` 只裁决并返回 `plan`（不执行）；`commit` 凭 ticket 执行。确认环节属于协议，客户端无法跳过。 |
+| **plan** | 待执行动作，**argv 数组**而非命令字符串。不经 shell，因此不存在管道/重定向与命令注入面。 |
+| **verdict** | 裁决结果：`allow` / `confirm` / `deny` / `refused`。由 broker 产生，模型无权决定。 |
+| **ticket** | 一次性执行凭证：128bit 随机 + TTL 60s + 绑定 `capability_id` 与 `args_hash`。表上限 1024，LRU 淘汰。 |
+| **effect** | 能力的影响面：`read` / `write` / `delete` / `privilege` / `network`。**未标注一律按 `delete`**；只能由注册表给出，调用方无权声明。 |
+| **reversible** | 该能力的效果是否可撤销；不可逆操作至少要求 `confirm`。 |
+| **effect_defaulted** | 读取注册表时 `effect` 走了缺省值（即 `delete`）的标记，供审计与前端提示。 |
+| **broker** | 独立进程 `nlbroker`：承载注册表、裁决、ticket、审计；Unix socket 唯一入口；fail-closed。 |
+| **门面（facade）** | 把本地能力以标准协议暴露出去的适配层。v1 只有 MCP 门面，且**仅暴露 `perm ≤ L2`**。 |
+| **子进程桥** | 通过调用系统已有工具（`busctl`/`gdbus`/MCP server 子进程）实现外部能力，以维持"零新增 C 库依赖"。 |
+| **args_hash** | invoke 时对参数取 SHA-256，作为 ticket 绑定值；commit 时参数不一致即 `E_TICKET_MISMATCH`。 |
 
 ---
 
@@ -76,6 +89,10 @@ NL-OS 是一个**自然语言驱动的操作系统交互层**。目标是把「�
 - `[2026-10-25]` **模型只能"多要确认"，不能"少要确认"**：`deny` 永远由规则层/`nl-perm` 给出，模型只能把 allow 抬升为 confirm（防提示注入）。`@.specs/adr/013-typed-decision-layer.md`
 - `[2026-10-25]` **决策走两阶段**：规则粗筛 top-K（K=8）→ 仅对 K 做 GBNF Choice，输出 ≤16 token。反对全量枚举 GBNF。
 - `[2026-10-25]` **Score 由规则计算，不调模型**（避免同一输入两次推理）。
+- `[2026-10-25]` **CIP v1 定案**：五报文 / 两阶段 invoke-commit / `plan` 用 argv 数组不经 shell / `effect` 五类且缺省 delete / 威胁模型"模型不可信、系统用户可信"。`@.specs/adr/016-cip-protocol.md`
+- `[2026-10-25]` **broker 为独立进程 + fail-closed**；ticket 一次性、TTL 60s、绑定 args_hash、表上限 1024 + LRU。`@.specs/adr/017-broker-process.md`
+- `[2026-10-25]` **执行面用子进程桥**：不引 libdbus / libcurl / TLS；`http:` 仅 http://，https 走 `cli:curl`。`@.specs/adr/018-capability-adapters.md`
+- `[2026-10-25]` **不做策略语言**（YAML/Rego/Cedar），策略用编译期表 + 运行期规则——解释器在端侧是纯负担。
 - `[2026-10-25]` **能力注册表格式 v1 冻结**：JSON Lines + `format_version` + `flock` + `rename` 原子写 + 权限 0600。`@.specs/adr/012-capability-registry.md`
 - `[2026-07-01]` **ADR-004** 模型选型流程：先建 benchmark（1000 条中文 NL→命令测试集）→ 跑分对比 → 数据驱动选型。对比维度：准确率/延迟/内存。来自 `@.specs/nl-os/CHANGE.md`
 - `[2026-07-01]` **ADR-005** 内核集成路线：Phase 1 用户态权限守护 → Phase 2 eBPF → Phase 3 评估 .ko 必要性。来自 `@.specs/nl-os/CHANGE.md`
