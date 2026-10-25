@@ -39,7 +39,7 @@
 ### AC-4 · confirm → ticket → commit
 
 - **Given** 一个 L2 写操作（`cli:mkdir`），`invoke` 返回 `verdict:"confirm"` 与 `ticket`
-- **When** 客户端带该 ticket 发 `commit`
+- **When** 客户端带该 ticket + 相同 `capability`/`args` 发 `commit`
 - **Then** 执行成功且返回 `audit_id`；**无 ticket / 伪造 ticket / 超过 TTL / 参数与 invoke 时不符** 四种情况一律拒绝，且拒绝原因可区分
 - **验证方式**: 脚本跑 5 个分支（正常 + 4 种非法），断言返回码分别为 `ok / E_TICKET_INVALID / E_TICKET_EXPIRED / E_TICKET_REPLAY(参数不符)`
 

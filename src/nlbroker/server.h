@@ -23,4 +23,8 @@ void nl_server_request_stop(void);
 /* 处理一行请求，写入响应（含换行）。返回写入长度，失败返回 -1。 */
 int  nl_server_handle_line(const char *line, char *out, size_t out_cap);
 
+/* 注入业务处理器（T08 接 dispatch）；未注入时退化为 T02 的骨架行为 */
+typedef int (*NlLineHandler)(void *ctx, const char *line, char *out, size_t cap);
+void nl_server_set_handler(NlLineHandler h, void *ctx);
+
 #endif /* NL_BROKER_SERVER_H */

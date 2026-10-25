@@ -99,6 +99,10 @@ target_link_libraries(nl-perm PRIVATE nlc)
 add_executable(nlbroker
     src/nlbroker/main.c
     src/nlbroker/server.c
+    src/nlbroker/dispatch.c
+    src/nlbroker/verdict.c
+    src/nlbroker/ticket.c
+    src/nlbroker/adapter_cli.c
 )
 target_link_libraries(nlbroker PRIVATE nlc)
 

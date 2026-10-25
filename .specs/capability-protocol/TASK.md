@@ -198,7 +198,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T04</depends_on>
 </task>
 
-<task id="T08" parallel="false" status="pending" auto="true">
+<task id="T08" parallel="false" status="done" auto="true">
   <name>W2 集成：discover→describe→invoke→commit→audit 全链路（AC-1,2,3,4,9）</name>
   <read_files>
     src/nlbroker/*
@@ -208,6 +208,10 @@ W5 HTTP+收口    T13[P] → T14                  │
     src/nlbroker/main.c
     src/nlbroker/dispatch.c
     src/nlbroker/dispatch.h
+    src/nlbroker/server.c          <!-- 扩范围：handler 注入 -->
+    src/nlbroker/server.h          <!-- 扩范围：NlLineHandler -->
+    src/libnlc/cip.c               <!-- 扩范围：commit 补 capability/args（契约缺陷） -->
+    tests/unit/cip_test.c          <!-- 扩范围：同步 commit 契约 -->
     scripts/verify_w2.sh
   </write_files>
   <action>

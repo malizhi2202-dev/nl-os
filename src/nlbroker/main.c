@@ -2,6 +2,7 @@
  * main.c — nlbroker 入口（ADR-017 / T02）
  */
 #include "server.h"
+#include "dispatch.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -18,7 +19,7 @@ static void on_term(int sig)
 static void usage(void)
 {
     printf("nlbroker — NL-OS capability broker (CIP v1)\n");
-    printf("用法: nlbroker [--socket PATH] [--dry-run]\n");
+    printf("用法: nlbroker [--socket PATH] [--registry PATH] [--dry-run]\n");
 }
 
 int main(int argc, char **argv)
@@ -26,11 +27,14 @@ int main(int argc, char **argv)
     NlServerOpts opts;
     memset(&opts, 0, sizeof(opts));
     opts.socket_path = NL_DEFAULT_SOCKET;
+    const char *registry_path = NULL;
     int dry_run = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--socket") == 0 && i + 1 < argc) {
             opts.socket_path = argv[++i];
+        } else if (strcmp(argv[i], "--registry") == 0 && i + 1 < argc) {
+            registry_path = argv[++i];
         } else if (strcmp(argv[i], "--dry-run") == 0) {
             dry_run = 1;
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -55,7 +59,16 @@ int main(int argc, char **argv)
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
 
-    if (nl_server_run(&opts) != 0) {
+    NlDispatch disp;
+    if (nl_dispatch_init(&disp, registry_path) != 0) {
+        fprintf(stderr, "nlbroker: 注册表初始化失败\n");
+        return 1;
+    }
+    nl_server_set_handler(nl_dispatch_line, &disp);
+
+    int rc = nl_server_run(&opts);
+    nl_dispatch_free(&disp);
+    if (rc != 0) {
         fprintf(stderr, "nlbroker: 启动失败 (%s)\n", opts.socket_path);
         return 1;
     }

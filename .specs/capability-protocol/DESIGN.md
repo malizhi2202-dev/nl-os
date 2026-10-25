@@ -117,7 +117,7 @@
 → {"ok":true,"verdict":"deny","reason":"protected path /etc","plan":null,
    "alternatives":["cli:ls"]}
 
-{"op":"commit","id":"r3","ticket":"<...>"}
+{"op":"commit","id":"r3","ticket":"<...>","capability":"cli:mkdir","args":{"paths":["/tmp/x"]}}
 → {"ok":true,"status":"ok","exit":0,"output":"","snapshot_ref":null,"audit_id":"a-..."}
 
 {"op":"audit","id":"r4","since":1699999999,"limit":50}
@@ -143,6 +143,7 @@
 
 - 128bit CSPRNG；一次性；TTL 默认 60s（可配）
 - 内容：`{capability_id, args_hash(SHA-256), effect, created_at, nonce}`
+- **`commit` 必须回带 `capability` 与 `args`**（T08 实现时发现：只带 ticket 无法检测参数篡改）
 - `commit` 校验三项：存在、未过期、`args_hash` 一致；任一不符即拒并记审计
 - 已提交的 nonce 进入短时黑名单（防重放）
 

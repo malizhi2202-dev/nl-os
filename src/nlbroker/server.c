@@ -23,6 +23,10 @@
 #define NL_BROKER_OUT_CAP   8192
 
 static volatile sig_atomic_t g_stop = 0;
+static NlLineHandler g_handler;
+static void *g_handler_ctx;
+
+void nl_server_set_handler(NlLineHandler h, void *ctx) { g_handler = h; g_handler_ctx = ctx; }
 
 void nl_server_request_stop(void) { g_stop = 1; }
 
@@ -43,6 +47,8 @@ static int send_all(int fd, const char *buf, size_t len)
 /* T02：只有 discover 有实现（空能力表）；T08 换成 dispatch.c */
 int nl_server_handle_line(const char *line, char *out, size_t out_cap)
 {
+    if (g_handler) return g_handler(g_handler_ctx, line, out, out_cap);
+
     NlCipReq  req;
     NlCipResp resp;
     memset(&resp, 0, sizeof(resp));

@@ -99,9 +99,15 @@ static void test_commit_and_audit(void)
 {
     TEST("commit / audit fields");
     NlCipReq r;
-    ASSERT(nl_cip_parse("{\"v\":1,\"id\":\"r3\",\"op\":\"commit\",\"ticket\":\"abc\"}", &r) == NL_CIP_OK,
+    ASSERT(nl_cip_parse("{\"v\":1,\"id\":\"r3\",\"op\":\"commit\",\"ticket\":\"abc\","
+                        "\"capability\":\"cli:mkdir\",\"args\":{\"paths\":[\"/tmp/x\"]}}", &r) == NL_CIP_OK,
            "commit should parse");
     ASSERT(strcmp(r.ticket, "abc") == 0, "ticket mismatch");
+    ASSERT(strcmp(r.capability, "cli:mkdir") == 0, "commit must carry capability");
+
+    NlCipReq bad;
+    ASSERT(nl_cip_parse("{\"v\":1,\"id\":\"r5\",\"op\":\"commit\",\"ticket\":\"abc\"}", &bad) == NL_CIP_E_BAD_REQ,
+           "commit without capability must be rejected");
 
     NlCipReq a;
     ASSERT(nl_cip_parse("{\"v\":1,\"id\":\"r4\",\"op\":\"audit\",\"since\":123,\"limit\":9999}", &a) == NL_CIP_OK,

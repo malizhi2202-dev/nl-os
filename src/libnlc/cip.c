@@ -154,11 +154,27 @@ int nl_cip_parse(const char *line, NlCipReq *out)
         if (get_int(doc.root, "dry_run", &dry) == 0) out->dry_run = dry ? 1 : 0;
         break;
     }
-    case NL_CIP_OP_COMMIT:
+    case NL_CIP_OP_COMMIT: {
+        cJSON *args = NULL;
         if (get_str(doc.root, "ticket", out->ticket, sizeof(out->ticket)) != 0) {
             rc = NL_CIP_E_BAD_REQ; goto done;
         }
+        /* commit 必须回带 capability 与 args，用于校验参数是否被篡改（AC-4） */
+        if (get_str(doc.root, "capability", out->capability, sizeof(out->capability)) != 0) {
+            rc = NL_CIP_E_BAD_REQ; goto done;
+        }
+        args = cJSON_GetObjectItem(doc.root, "args");
+        if (args) {
+            char *js = nl_json_print(args);
+            if (!js) { rc = NL_CIP_E_BAD_REQ; goto done; }
+            if (strlen(js) >= sizeof(out->args_json)) { free(js); rc = NL_CIP_E_BAD_REQ; goto done; }
+            snprintf(out->args_json, sizeof(out->args_json), "%.1023s", js);
+            free(js);
+        } else {
+            snprintf(out->args_json, sizeof(out->args_json), "{}");
+        }
         break;
+    }
     case NL_CIP_OP_AUDIT: {
         long since = 0;
         int lim = 50;
