@@ -55,6 +55,26 @@
 | **BlueLM-GUI**（vivo） | 厂商官方开源实现 |
 | 数据集/基准 | AITW、AndroidControl、Mobile-Bench、GUI-Odyssey、**AndroidWorld**（有公开榜） |
 
+## 4.5 GitHub 版图（2026-10-25 实测 star / 许可 / 语言）
+
+| 仓库 | Star | 语言 | 许可 | 定位 | 状态 |
+|---|---:|---|---|---|---|
+| [bytedance/UI-TARS](https://github.com/bytedance/UI-TARS) | **11,633** | Python | Apache-2.0 | 原生 GUI agent 模型家族（2B/7B 权重公开） | 活跃 |
+| [droidrun/mobilerun](https://github.com/droidrun/mobilerun) | **9,779** | Python | MIT | **"用自然语言命令自动化手机"**，LLM 无关 | 当日仍在提交 |
+| [X-PLUG/MobileAgent](https://github.com/X-PLUG/MobileAgent) | **9,329** | Python | MIT | Mobile-Agent v1→v3.5 + **GUI-Owl 1.5（2B/4B/8B/32B/235B）** + ToolCUA + UI-S1；含 AndroidWorld/OSWorld 评测代码 | 活跃 |
+| [Purewhiter/mobilegym](https://github.com/Purewhiter/mobilegym) | 838 | TypeScript/Python | Apache-2.0 | 浏览器内 Android 模拟器 + 可验证评测 + 在线 RL | EMNLP 2026 |
+| [APUS-AI-Lab/PhoneBuddySDK](https://github.com/APUS-AI-Lab/PhoneBuddySDK) | 37 | **Rust** | Apache-2.0 | 可嵌入 App 的 agent 引擎，**native C FFI** + Swift/Kotlin 绑定、沙箱运行时、工具调用循环 | 2026-08 起 |
+| [antgroup/Napaxi](https://github.com/antgroup/Napaxi) | 33 | **Rust** | GPL-3.0 | **手机原生 agent SDK**：沙箱执行、可扩展工具、MCP、x-app/x-agent/x-channel 互通（蚂蚁） | 2026-07 起 |
+| [ForrestKim42/llm-app-exploration](https://github.com/ForrestKim42/llm-app-exploration) | 23 | — | MIT | **Accessibility-first（非视觉）** 的通用 App 探索/控制模式，走 ADB + MCP | 方法样例 |
+| [k4wai1/jav](https://github.com/k4wai1/jav) | — | — | — | 非 root Android 控制运行时（MCP）+ 双层级 AI（**Jev + director**） | 项目 |
+| [loyality7/headless-android-sdk](https://github.com/loyality7/headless-android-sdk) | — | — | — | Shizuku 授权的**无头虚拟屏**自动化，不碰真实屏幕 | 项目 |
+
+**三点观察**：
+
+1. **成熟度有客观指标**：三个万级 star 仓库（UI-TARS 11.6k / mobilerun 9.8k / MobileAgent 9.3k），且 mobilerun 当日仍有提交——不是论文仓库，是活跃工程。
+2. **两条技术路线并存**：视觉系（截屏 + VLM）与 **accessibility-first（控件树，不截屏）**。后者更快、更省，也更接近"结构化执行"的思路。
+3. **"安全执行层"这个想法在手机上已经有人做**：蚁蚁（Napaxi）的卖点正是"沙箱执行 + 可扩展工具 + MCP 互通"——与本项目 L1–L4 + 能力注册表的**意图重合**，只是执行面不同。这既说明思路成立，也说明手机不是空位。
+
 ## 5. 关键判断（对本项目）
 
 **可用性**：完全成立。模型（2B/9B）、运行层（llama.cpp + ONNX/NPU）、控制层（无障碍/Shizuku/MCP）、框架（Mobile-Agent/jav）四层都齐，且已有人做成免费 App 并公开实测。
