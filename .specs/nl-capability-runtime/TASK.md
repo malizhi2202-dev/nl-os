@@ -128,7 +128,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on>T01</depends_on>
 </task>
 
-<task id="T04" parallel="true" status="pending" auto="true">
+<task id="T04" parallel="true" status="done" auto="true">
   <name>capability_selftest：三档分类（usable / needs-privilege / missing）</name>
   <read_files>
     .specs/nl-capability-runtime/REQUIREMENT.md
@@ -150,7 +150,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on>T03</depends_on>
 </task>
 
-<task id="T05" parallel="true" status="pending" auto="true">
+<task id="T05" parallel="true" status="done" auto="true">
   <name>budget：规则版复杂度预算 + refused 输出结构</name>
   <read_files>
     .specs/nl-capability-runtime/REQUIREMENT.md

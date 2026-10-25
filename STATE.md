@@ -7,10 +7,10 @@
 ## 当前位置
 
 - **活跃 Change**: 无（`capability-protocol` 已完成并归档）
-- **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: 无（capability-protocol 已归档；下一轮可由用户开新 CHANGE）
-- **当前 Task**: —
-- **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
+- **活跃 Change**: `nl-capability-runtime`（已恢复；T01–T05 完成，下一任务 T06 快路径审计）
+- **当前阶段**: DEV（nl-capability-runtime 段 1 收尾）
+- **当前 Task**: `T06`（快路径 + 审计 fast_path）
+- **中断任务**（来自 R1.5 清窗）: 无（T06–T08 即将继续）
 - **会话开始建议**:
   - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`（CHANGE/REQUIREMENT/DESIGN/TASK/TEST/REVIEW/UAT + 14 个 SUMMARY）
   - 暂停中的 change → `@.specs/nl-capability-runtime/PROGRESS.md`

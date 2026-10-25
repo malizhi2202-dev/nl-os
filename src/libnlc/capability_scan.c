@@ -13,6 +13,10 @@
 #include "capability_perm_map.h"
 
 #include <dirent.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,10 +135,69 @@ int nl_cap_scan_dirs(const char *const *dirs, int n, NlCapRegistry *out)
     return added;
 }
 
-/* T04 实现 */
+/*
+ * 只读探测：执行 path 且输出丢弃；返回 1 = 真的跑起来了，0 = 启动失败/超时。
+ * 不写任何文件，不改系统状态。
+ */
+static int probe_exec(const char *path, int timeout_ms)
+{
+    if (!path || access(path, X_OK) != 0) return 0;
+
+    pid_t pid = fork();
+    if (pid < 0) return 0;
+    if (pid == 0) {
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            (void)dup2(devnull, STDOUT_FILENO);
+            (void)dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        char *argv[] = { (char *)path, (char *)"--version", NULL };
+        execv(path, argv);
+        _exit(127);
+    }
+
+    long waited = 0;
+    int status = 0;
+    for (;;) {
+        pid_t w = waitpid(pid, &status, WNOHANG);
+        if (w == pid) break;
+        if (w < 0) return 0;
+        if (waited >= timeout_ms) {
+            kill(pid, SIGKILL);
+            (void)waitpid(pid, &status, 0);
+            return 0;
+        }
+        struct timespec ts = { 0, 10 * 1000 * 1000 };
+        nanosleep(&ts, NULL);
+        waited += 10;
+    }
+    if (!WIFEXITED(status)) return 0;
+    return (WEXITSTATUS(status) == 127) ? 0 : 1;   /* 127 = exec 失败 */
+}
+
 int nl_cap_selftest(NlCapRegistry *r, NlSelfTestReport *rep)
 {
-    (void)r;
-    (void)rep;
-    return -1;
+    if (!r || !rep) return -1;
+    memset(rep, 0, sizeof(*rep));
+
+    int total = nl_cap_count(r);
+    for (int i = 0; i < total; i++) {
+        const NlCapability *c = nl_cap_at(r, i);
+        if (!c) continue;
+
+        if (!c->trusted || !c->path || access(c->path, X_OK) != 0) {
+            rep->missing++;
+            continue;
+        }
+        if (c->perm_level >= 2) {
+            /* 需要确认/特权的能力不做实际执行探测，直接归入 needs-privilege */
+            rep->needs_privilege++;
+            continue;
+        }
+        if (probe_exec(c->path, 200)) rep->usable++;
+        else rep->missing++;
+    }
+    rep->total = rep->usable + rep->needs_privilege + rep->missing;
+    return rep->total;
 }
