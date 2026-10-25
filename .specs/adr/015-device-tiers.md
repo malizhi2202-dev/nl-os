@@ -42,15 +42,20 @@
 | **A1** | 扫地机器人 SoC（全志 Cortex-A7 四核 + 512MB DDR3 + 4GB eMMC）、OpenWrt 路由、老电视盒子 | 128MB–768MB | **仅 embedding + 规则**；decoder 完全不上（0.35B 常驻约 250MB，512MB 机器会 OOM） |
 | **A2** | 树莓派 4、入门工控机 | 1–4GB | embedding + 可选 0.35B decoder |
 
-**明确不支持 · 手机（Android / iOS）**——理由是**平台不允许，而非硬件不够**：
+**手机（Android / iOS）：模型能跑，系统级 NL 操作不支持**
 
-- 手机硬件属 Tier C 甚至更强（ARMv9 八核 / 12–16GB / NPU），跑得动 3B
-- 但 Android 不是 GNU/Linux：不符合 FHS（无 `/usr/bin`）、Bionic libc 与 glibc ABI 不兼容、
-  Android 8+ 非 root 下静态可执行被 seccomp 拦截、App 沙箱（独立 uid + SELinux label）拿不到系统级能力
-- 因此 `nlsh` / 能力自发现 / 跨进程权限裁决在手机上均不成立
-- **保留的唯一形态是 SDK**：`libnlc`（尤其 embedding 后端）可作为 `.so` 经 NDK 编入 App，
-  由 App 自行声明可用能力；此时 L1–L4 只覆盖 App 内部动作，与 Android 系统权限体系并存而非替代
-- iOS 更快出局：无 `fork/exec`、无任意进程加载、App Store 审核限制
+必须把两件事分开，否则容易误读成"手机上连模型都跑不了"：
+
+| 事项 | 结论 |
+|---|---|
+| 在手机上跑模型 | ✅ **完全可行**，且是端侧最强一档（ARMv9 八核 / 12–16GB / NPU；0.6B Q4 可达数十 tok/s，24–30M embedding 单次前向仅数毫秒）。厂商内置（Gemini Nano / Apple 端侧模型）与 App 内自跑（llama.cpp / MLC 编入 APK）都在做 |
+| 在手机上做"系统级 NL 操作" | ❌ 不支持：**问题不在算力，在没有可执行面**。Android 无 FHS（无 `/usr/bin`）、Bionic libc 与 glibc ABI 不兼容、Android 8+ 非 root 下静态可执行被 seccomp 拦截、App 沙箱（独立 uid + SELinux label）拿不到系统能力；"执行一条命令"这个对象本身不存在，可执行面是 Android API、权限模型由系统提供 |
+
+手机上真实的"自然语言操作系统"形态是 **Agent 操作 UI**（截屏 + 视觉模型 + 无障碍服务点击，如 AutoGLM / Mobile-Agent / AppAgent），
+与本项目"C + 模板填充 + L1–L4 + 命令执行"的技术栈没有交集，属**另一条产品线**，不进本 change。
+
+**可复用到手机的部分**：仅 `embedding` 意图分类后端（可编为 `.so` 经 NDK 嵌入 App）。
+`能力注册表 / L1–L4 / 模板填充 / fallback` 在手机上无对应对象。
 
 > 依据：Termux 官方《Differences from Linux》（FHS 不兼容 / Bionic libc / seccomp 限制 / 单用户沙箱）。
 
