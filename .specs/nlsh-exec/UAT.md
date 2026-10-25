@@ -52,13 +52,42 @@ test -d repl-dir && echo OK
 ```
 **预期**：中文能打进命令行（不再被吞字），执行前问一次，`y` 之后目录出现。
 
+
+## 场景 5 · 统一确认门（ADR-019，一套词表/一个开关/一个取消码）
+
+```bash
+N=/path/to/nl-os/build/nlsh          # 或已安装的 ~/.local/bin/nlsh
+R=/path/to/nl-os/build/nl-run
+
+# ① 只读不问：直接出结果，不该出现"需要确认"
+$N --no-model -c '列出所有文件'
+
+# ② 五个词都算同意（y 以前在 nl-run 里是"取消"）
+for w in y Y yes YES 是; do printf '%s\n' "$w" | $N --no-model -c "创建一个叫 u_$w 的文件夹"; done
+
+# ③ 空行 / 无输入 = 取消，退出码 3（不是 1）
+printf '\n' | $N --no-model -c '创建一个叫 u_cancel 的文件夹'; echo "空行退出码=$?"
+$N --no-model -c '创建一个叫 u_cancel 的文件夹' </dev/null;      echo "EOF退出码=$?"
+
+# ④ 拒绝 ≠ 取消：能力不存在时退出码 1
+$N --no-model -c '重启 nginx'; echo "拒绝退出码=$?"
+
+# ⑤ nl-run 同一套词表；# @perm: allow-l2 固化后仍生效，但只到 L2
+printf '# @perm: allow-l2\n创建一个叫 u_l2 的文件夹\n' > u.tools
+$R --freeze u.tools && $R u.tools </dev/null; echo "allow-l2 创建退出码=$?"   # 0，且不提问
+printf '# @perm: allow-l2\n删除 u_l2\n' > d.tools
+$R --freeze d.tools && printf 'n\n' | $R d.tools; echo "allow-l2 删除退出码=$?"  # 3，目录还在
+```
+
+**预期**：①不提问；②五个目录都出现；③两个 `3` 且目录**没**出现；④`1`（与 3 可区分）；
+⑤创建不问（0）、删除仍问（3，`test -d u_l2` 仍成立）。
+
 ---
 
 ## 已知未达标项
 
 | 项 | 现状 | 影响 |
 |---|---|---|
-| 确认策略不统一 | `nl-run` 对 L2 自动放行，`nlsh` 问一次 | 两条路径语义不同，已登记下一 change 首项 |
 | IME 组合串 | 交互式中文可输入，未测输入法 pending 光标 | 拼音输入的边缘行为待真机验证 |
 | 快照对 `mkdir` | 目标不存在时 SKIP（L2 不提示） | 正常的创建操作不会积累无意义快照 |
 
@@ -68,5 +97,5 @@ test -d repl-dir && echo OK
 
 | 角色 | 结论 | 备注 |
 |---|---|---|
-| AI 实跑（2026-10-25） | ✅ 场景 1–3；场景 4 的 TTY 分支已用 `pty.fork()` 驱动验证（中文回显 + 退格 + 落盘），仍需你用手感确认一次 | 明细见 `TEST.md` §3 与 `T10-SUMMARY.md` |
+| AI 实跑（2026-10-25） | ✅ 场景 1–3、5；场景 4 的 TTY 分支已用 `pty.fork()` 驱动验证（中文回显 + 退格 + 落盘），仍需你用手感确认一次 | 明细见 `TEST.md` §3、§4 与 `T10-SUMMARY.md` |
 | 用户 | ⏳ 待填 | 任一不符合请记场景编号 |

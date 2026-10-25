@@ -143,6 +143,73 @@ chk "AC-11e 撤销后恢复" "[ -f fast_keep/v.txt ] && grep -q precious fast_ke
 chk "AC-11f nl-run 步骤进审计" "grep -q '\"result\":\"ok\"' '$WORK/audit2.json'"
 chk "AC-11f 取消进审计" "grep -q 'user-declined' '$WORK/audit2.json'"
 
+# ── AC-11g 回答词表全量：五个词都算同意；空行 / EOF / 否定词算取消 ──
+for w in y Y yes YES 是; do
+    rm -rf "pol_w_$w"
+    printf '%s\n' "$w" | "$NLSH" --no-model -c "创建一个叫 pol_w_$w 的文件夹" >/dev/null 2>&1
+    chk "AC-11g nlsh 接受回答 [$w]" "[ -d pol_w_$w ]"
+done
+rm -rf pol_nr_zheng && printf '创建一个叫 pol_nr_zheng 的文件夹\n' > polz.tools
+"$BUILD/nl-run" --freeze polz.tools >/dev/null 2>&1
+printf '是\n' | "$BUILD/nl-run" polz.tools >/dev/null 2>&1
+chk "AC-11g nl-run 接受中文「是」" "[ -d pol_nr_zheng ]"
+rm -rf pol_blank && printf '\n' | "$NLSH" --no-model -c '创建一个叫 pol_blank 的文件夹' >/dev/null 2>&1; rc=$?
+chk "AC-11g 空行=取消（退出码 3）" "[ $rc -eq 3 ]"
+chk "AC-11g 空行未执行" "[ ! -d pol_blank ]"
+rm -rf pol_eof && "$NLSH" --no-model -c '创建一个叫 pol_eof 的文件夹' </dev/null >/dev/null 2>&1; rc=$?
+chk "AC-11g EOF=取消（nlsh 退出码 3）" "[ $rc -eq 3 ]"
+chk "AC-11g EOF 未执行" "[ ! -d pol_eof ]"
+rm -rf pol_eof2 && printf '创建一个叫 pol_eof2 的文件夹\n' > pole.tools
+"$BUILD/nl-run" --freeze pole.tools >/dev/null 2>&1
+"$BUILD/nl-run" pole.tools </dev/null >/dev/null 2>&1; rc=$?
+chk "AC-11g EOF=取消（nl-run 退出码 3）" "[ $rc -eq 3 ]"
+chk "AC-11g EOF 未执行（nl-run）" "[ ! -d pol_eof2 ]"
+rm -rf pol_nope && printf 'nope\n' | "$NLSH" --no-model -c '创建一个叫 pol_nope 的文件夹' >/dev/null 2>&1; rc=$?
+chk "AC-11g 否定词=取消" "[ $rc -eq 3 ] && [ ! -d pol_nope ]"
+
+# ── AC-11h 触发条件：只读不问（P-1） ──
+out=$(printf '' | "$NLSH" --no-model -c '列出所有文件' 2>&1); rc=$?
+printf '%s\n' "$out" > "$WORK/ro.txt"
+chk "AC-11h 只读命令直接执行（退出码 0）" "[ $rc -eq 0 ]"
+chk "AC-11h 只读命令不弹确认" "! grep -q '需要确认' '$WORK/ro.txt'"
+
+# ── AC-11i 绕过开关等价：NL_ASSUME_YES 对两个入口都生效；allow-l2 仍真能豁免 L2 ──
+rm -rf pol_env && NL_ASSUME_YES=1 "$NLSH" --no-model -c '创建一个叫 pol_env 的文件夹' </dev/null >/dev/null 2>&1
+chk "AC-11i NL_ASSUME_YES 对 nlsh 生效" "[ -d pol_env ]"
+rm -rf pol_env2 && printf '创建一个叫 pol_env2 的文件夹\n' > pole2.tools
+"$BUILD/nl-run" --freeze pole2.tools >/dev/null 2>&1
+NL_ASSUME_YES=1 "$BUILD/nl-run" pole2.tools </dev/null >/dev/null 2>&1
+chk "AC-11i NL_ASSUME_YES 对 nl-run 生效" "[ -d pol_env2 ]"
+rm -rf pol_l2 && printf '# @perm: allow-l2\n创建一个叫 pol_l2 的文件夹\n' > polL2.tools
+"$BUILD/nl-run" --freeze polL2.tools >/dev/null 2>&1
+chk "AC-11i 固化后仍保留 @perm 头" "grep -q '^# @perm: allow-l2$' polL2.tools"
+"$BUILD/nl-run" polL2.tools </dev/null >/dev/null 2>&1; rc=$?
+chk "AC-11i allow-l2 无输入即执行 L2" "[ $rc -eq 0 ] && [ -d pol_l2 ]"
+
+# ── AC-11j 退出码三态：0 成功 / 1 拒绝 / 3 取消（P-4） ──
+rm -rf pol_ok && printf 'y\n' | "$NLSH" --no-model -c '创建一个叫 pol_ok 的文件夹' >/dev/null 2>&1; rc_ok=$?
+"$NLSH" --no-model -c '重启 nginx' >/dev/null 2>&1; rc_refuse=$?
+printf 'n\n' | "$NLSH" --no-model -c '创建一个叫 pol_never 的文件夹' >/dev/null 2>&1; rc_cancel=$?
+chk "AC-11j 成功=0" "[ $rc_ok -eq 0 ]"
+chk "AC-11j 拒绝=1（与取消可区分）" "[ $rc_refuse -eq 1 ]"
+chk "AC-11j 取消=3" "[ $rc_cancel -eq 3 ]"
+
+# ── AC-11k 快路径：不问，但破坏性命令留快照 + 审计可查（P-5/P-6） ──
+snapdir="$XDG_STATE_HOME/nl-os/snapshots"
+before=$(ls "$snapdir" 2>/dev/null | wc -l)
+"$NLSH" --no-model -c 'ls' >/dev/null 2>&1
+after=$(ls "$snapdir" 2>/dev/null | wc -l)
+chk "AC-11k 非破坏性快路径不建快照" "[ $before -eq $after ]"
+rm -rf pol_fast && mkdir -p pol_fast && echo keep > pol_fast/k.txt
+"$NLSH" --no-model -c 'rm -rf pol_fast' >/dev/null 2>&1
+after2=$(ls "$snapdir" 2>/dev/null | wc -l)
+chk "AC-11k 破坏性快路径建快照" "[ $after2 -gt $after ]"
+"$NLSH" --no-model --undo >/dev/null 2>&1
+chk "AC-11k 快路径删除可撤销" "[ -f pol_fast/k.txt ] && grep -q keep pol_fast/k.txt"
+"$NLSH" --no-model --audit --since 0 --limit 400 > "$WORK/audit3.json" 2>&1
+chk "AC-11k 审计标出破坏性快路径" "grep -q '\"reason\":\"fast-path-destructive\"' '$WORK/audit3.json'"
+chk "AC-11k 审计区分普通快路径" "grep -q '\"reason\":\"fast-path\"' '$WORK/audit3.json'"
+
 echo
 echo "=== 结果：$pass 通过 / $fail 失败"
 rm -rf "$STATE" "$WORK"

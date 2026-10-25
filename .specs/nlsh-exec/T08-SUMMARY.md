@@ -16,5 +16,7 @@
   | P-4 退出码 | 0 成功 / 1 失败 / **3 取消**（两处一致，`nl-run` 不再返回步骤序号） |
   | P-5 审计 | `nl-run` 每步写审计；快路径破坏性命令（rm/mv/dd/…）执行前留快照，`reason=fast-path-destructive` |
   | P-6 快路径不问 | 保持 shell 语义，但有快照 + 审计（不再"无痕"） |
-- **verify**: `test_confirm` 4 组；`verify_exec.sh` AC-11a~11f 13 条断言
+- **verify**: `test_confirm` 4 组 + `freeze_test`（策略头保留/防篡改）；`verify_exec.sh` AC-11a~11k **40 条断言**
 - **行为变化（需告知用户）**: `nl-run` 取消退出码 1/序号 → 3；`y` 现在到处都算同意；`# @perm: allow-l2` 不再豁免 L3 删除
+- **落地测试补记（同日）**: 扩 AC-11 到 40 条时撞出缺陷——`--freeze` 只写 `@format/@checksum/正文`，
+  策略头被丢，固化后 `allow-l2` 静默失效（AC-11c 这类负向用例抓不到）。已修：策略头写入固化文件并纳入校验和

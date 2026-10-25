@@ -10,7 +10,14 @@ NlScript *nl_script_parse(const char *fp){
     while(fgets(buf,sizeof(buf),f)){
         char *l=buf;while(*l==' '||*l=='\t')l++;
         if(*l=='#'){
-            if(strncmp(l,"# @perm:",8)==0&&strstr(l,"allow-l2"))s->allow_l2=1;
+            /* 策略头原样留住：固化时不写回，`# @perm: allow-l2` 就会静默失效 */
+            if(strncmp(l,"# @perm:",8)==0){
+                if(!s->perm_line){
+                    size_t len=strlen(l);while(len>0&&(l[len-1]=='\n'||l[len-1]=='\r'))l[--len]=0;
+                    s->perm_line=strdup(l);
+                }
+                if(strstr(l,"allow-l2"))s->allow_l2=1;
+            }
             continue;
         }
         size_t len=strlen(l);while(len>0&&(l[len-1]=='\n'||l[len-1]=='\r'))l[--len]=0;
@@ -20,4 +27,4 @@ NlScript *nl_script_parse(const char *fp){
     }
     fclose(f);return s;
 }
-void nl_script_free(NlScript *s){if(!s)return;for(int i=0;i<s->count;i++)free(s->lines[i]);free(s->lines);free(s);}
+void nl_script_free(NlScript *s){if(!s)return;for(int i=0;i<s->count;i++)free(s->lines[i]);free(s->lines);free(s->perm_line);free(s);}

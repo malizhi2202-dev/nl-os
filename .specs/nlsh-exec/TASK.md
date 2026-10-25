@@ -49,8 +49,10 @@
 
 ### T08 · 统一确认门（ADR-019，专家团讨论后追加）
 - **write_files**: `src/libnlc/confirm.c/.h`（新）、`src/nlsh/dispatch.c`、`src/nlsh/main.c`、`src/nl-run/main.c`、`tests/unit/confirm_test.c`、`scripts/verify_exec.sh`
-- **verify**: `test_confirm` 4/4；`verify_exec.sh` AC-11a~11f 全绿
+- **verify**: `test_confirm` 4/4；`verify_exec.sh` AC-11a~11k 全绿（40 条）
 - **auto**: true
+- **落地复盘**: 扩测试时发现 `--freeze` 会丢掉 `# @perm:` 策略头（`allow-l2` 固化后静默失效），
+  已修（策略头随固化保留并纳入校验和）；`freeze_test` + AC-11i 锁住
 
 ### T09 · 本地安装与模型自动发现（用户反馈 `nlsh: command not found` 后追加）
 - **write_files**: `scripts/install_local.sh`（新）、`CMakeLists.txt`（RPATH + `NL_INSTALL_SYSTEM_FILES`）、`src/libnlc/model_loader.c/.h`、4 处调用点

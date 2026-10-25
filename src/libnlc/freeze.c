@@ -67,12 +67,26 @@ int nl_freeze_is_frozen(const char *path)
     return found;
 }
 
-int nl_freeze_write(const char *path, char *const *body, int n_body)
+int nl_freeze_write(const char *path, char *const *body, int n_body,
+                    const char *policy_line)
 {
     if (!path || !body || n_body <= 0) return -1;
+    /* 只接受注释行，避免调用方把正文/元字符塞进策略头 */
+    if (policy_line && policy_line[0] != '#') return -1;
 
     char digest[65];
-    chain_hash(body, n_body, digest);
+    if (policy_line) {
+        /* 校验覆盖策略头 + 正文：改 allow-l2 也算篡改 */
+        int n_all = n_body + 1;
+        char **all = malloc((size_t)n_all * sizeof(char *));
+        if (!all) return -1;
+        all[0] = (char *)policy_line;
+        for (int i = 0; i < n_body; i++) all[i + 1] = body[i];
+        chain_hash(all, n_all, digest);
+        free(all);
+    } else {
+        chain_hash(body, n_body, digest);
+    }
 
     char tmp[4096];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
@@ -80,6 +94,7 @@ int nl_freeze_write(const char *path, char *const *body, int n_body)
     if (!f) return -1;
     fprintf(f, "# @format: %d\n", NL_FREEZE_FORMAT);
     fprintf(f, "# @checksum: sha256:%s\n", digest);
+    if (policy_line) fprintf(f, "%s\n", policy_line);
     for (int i = 0; i < n_body; i++) fprintf(f, "%s\n", body[i]);
     fflush(f);
     fclose(f);

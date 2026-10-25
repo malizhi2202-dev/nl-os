@@ -2,7 +2,7 @@
 
 - **Change ID**: `nlsh-exec`
 - **日期**: 2026-10-25
-- **结论**: 验收脚本 36/36 通过；`ctest` 30/30；段 1/2/3 验收 12/12、18/18、16/16；`verify_all.sh` 0 失败
+- **结论**: 验收脚本 **76/76** 通过；`ctest` **31/31**（Debug+Release）；段 1/2/3 验收 12/12、18/18、16/16；`verify_all.sh` 0 失败
 
 ---
 
@@ -12,7 +12,7 @@
 |---|---|---|
 | 单元测试 | `ctest`（Debug, ASan/UBSan） | **31/31 passed**（新增 `exec`、`confirm`） |
 | 单元测试 | `ctest`（Release） | **31/31 passed** |
-| 本 change 验收 | `scripts/verify_exec.sh` | **49 通过 / 0 失败**（含 AC-11 统一确认门 13 条） |
+| 本 change 验收 | `scripts/verify_exec.sh` | **76 通过 / 0 失败**（含 AC-11 统一确认门 40 条） |
 | 段 1 | `scripts/verify_segment1.sh` | pass=12 fail=0 |
 | 段 2 | `scripts/verify_segment2.sh` | 18 通过 / 0 失败（decoder 档） |
 | 段 3 | `scripts/verify_segment3.sh` | pass=16 fail=0 |
@@ -32,7 +32,7 @@
 | AC-8 无 shell 注入 | `exec_test`（9 反例 + 4 正例）+ `verify_exec.sh` AC-8 端到端 | ✅ |
 | AC-9 审计可追溯 | `verify_exec.sh` AC-9（6 条） | ✅ |
 | AC-10 不回归 | 上面的全套件 | ✅ |
-| AC-11 确认策略统一（ADR-019） | `confirm_test`（4 组）+ `verify_exec.sh` AC-11a~11f（13 条） | ✅ |
+| AC-11 确认策略统一（ADR-019） | `confirm_test`（4 组）+ `freeze_test`（策略头保留/防篡改）+ `verify_exec.sh` AC-11a~11k（40 条） | ✅ |
 | AC-12 本地安装可用 | 登录 shell `command -v nlsh` + 无 `NL_MODEL_PATH` 时模型自动发现 | ✅ |
 | AC-13 ARM64 交叉构建与运行 | 交叉构建 + `qemu-aarch64-static` 跑 scan/eval，数值与 x86_64 一致 | ✅（stub 模型） |
 
@@ -109,6 +109,38 @@ $ ./build/nlsh --no-model --audit --since 0 --limit 200
  {…"result":"cancelled","reason":"user-declined"…}]
 ```
 
+### AC-11（确认策略统一，ADR-019 全矩阵实跑）
+
+```
+PASS AC-11g nlsh 接受回答 [y] / [Y] / [yes] / [YES] / [是]
+PASS AC-11g nl-run 接受中文「是」
+PASS AC-11g 空行=取消（退出码 3）         PASS AC-11g 空行未执行
+PASS AC-11g EOF=取消（nlsh 退出码 3）     PASS AC-11g EOF 未执行
+PASS AC-11g EOF=取消（nl-run 退出码 3）   PASS AC-11g EOF 未执行（nl-run）
+PASS AC-11g 否定词=取消
+PASS AC-11h 只读命令直接执行（退出码 0）  PASS AC-11h 只读命令不弹确认
+PASS AC-11i NL_ASSUME_YES 对 nlsh 生效    PASS AC-11i NL_ASSUME_YES 对 nl-run 生效
+PASS AC-11i 固化后仍保留 @perm 头         PASS AC-11i allow-l2 无输入即执行 L2
+PASS AC-11j 成功=0  PASS AC-11j 拒绝=1（与取消可区分）  PASS AC-11j 取消=3
+PASS AC-11k 非破坏性快路径不建快照        PASS AC-11k 破坏性快路径建快照
+PASS AC-11k 快路径删除可撤销              PASS AC-11k 审计标出破坏性快路径
+PASS AC-11k 审计区分普通快路径
+```
+
+落地测试时撞出并修掉的缺陷（AC-11i 就是为了锁住它）：
+
+```
+$ printf '# @perm: allow-l2\n创建一个叫 l2f 的文件夹\n' > f.tools
+$ build/nl-run --freeze f.tools          # 改前：固化后 # @perm 头消失
+$ build/nl-run f.tools </dev/null        # → 仍然问一次 → 退出码 3（开关静默失效）
+# 改后固化文件：
+# @format: 2
+# @checksum: sha256:5dfd514a…c6ed
+# @perm: allow-l2
+创建一个叫 l2f 的文件夹
+$ build/nl-run f.tools </dev/null        # → mkdir -p l2f ✅ 退出码 0
+```
+
 ## 4. 评测集未回归
 
 ```
@@ -136,6 +168,5 @@ Release 构建（`build-rel`），同一临时状态目录，各跑 3 次：
 
 | 项 | 说明 |
 |---|---|
-| `nl-run` 的 L2 自动放行 | `nl-run` 沿用既有 `allow_l2`（固化脚本里 L2 不问），`nlsh` 走"问一次"，两条路径的确认策略尚未统一 |
 | 快照对 `mkdir` | 目标不存在时 `NL_SNAP_SKIPPED`（L2 不提示，L3+ 才提示） |
 | 交互式 UTF-8 | 已支持多字节输入，但未做输入法组合串（IME pending string）的光标处理 |

@@ -29,7 +29,7 @@ static void test_write_and_verify(void)
 {
     TEST("write then verify OK");
     char *body[] = { "mkdir build", "cd build", "touch README.md" };
-    ASSERT(nl_freeze_write("/tmp/nlfreeze-a.tools", body, 3) == 0, "write failed");
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-a.tools", body, 3, NULL) == 0, "write failed");
     ASSERT(nl_freeze_verify("/tmp/nlfreeze-a.tools") == NL_FREEZE_OK, "verify should pass");
     ASSERT(nl_freeze_is_frozen("/tmp/nlfreeze-a.tools") == 1, "must be frozen");
     PASS();
@@ -39,9 +39,9 @@ static void test_idempotent(void)
 {
     TEST("freeze is idempotent");
     char *body[] = { "mkdir x", "ls x" };
-    ASSERT(nl_freeze_write("/tmp/nlfreeze-b.tools", body, 2) == 0, "write1");
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-b.tools", body, 2, NULL) == 0, "write1");
     char *first = read_all("/tmp/nlfreeze-b.tools");
-    ASSERT(nl_freeze_write("/tmp/nlfreeze-b.tools", body, 2) == 0, "write2");
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-b.tools", body, 2, NULL) == 0, "write2");
     char *second = read_all("/tmp/nlfreeze-b.tools");
     ASSERT(first && second && strcmp(first, second) == 0, "content must be identical");
     free(first); free(second);
@@ -52,7 +52,7 @@ static void test_tamper_body(void)
 {
     TEST("tampered body rejected");
     char *body[] = { "mkdir safe", "rm -rf /tmp/target" };
-    ASSERT(nl_freeze_write("/tmp/nlfreeze-c.tools", body, 2) == 0, "write");
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-c.tools", body, 2, NULL) == 0, "write");
     FILE *f = fopen("/tmp/nlfreeze-c.tools", "r");
     ASSERT(f != NULL, "open");
     char buf[8192]; size_t n = fread(buf, 1, sizeof(buf) - 1, f); buf[n] = '\0'; fclose(f);
@@ -70,7 +70,7 @@ static void test_tamper_header(void)
 {
     TEST("tampered checksum header rejected");
     char *body[] = { "echo hi" };
-    ASSERT(nl_freeze_write("/tmp/nlfreeze-d.tools", body, 1) == 0, "write");
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-d.tools", body, 1, NULL) == 0, "write");
     char *buf = read_all("/tmp/nlfreeze-d.tools");
     ASSERT(buf != NULL, "read");
     char *p = strstr(buf, "# @checksum: sha256:");
@@ -101,6 +101,34 @@ static void test_missing_file(void)
     PASS();
 }
 
+/* ADR-019 P-3：`# @perm: allow-l2` 必须随固化保留，且被校验覆盖。
+ * 曾经的缺陷：freeze 只写 format+checksum+正文，策略头在 --freeze 后静默消失。 */
+static void test_policy_header_preserved(void)
+{
+    TEST("policy header survives freeze and is hashed");
+    char *body[] = { "mkdir x" };
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-f.tools", body, 1, "# @perm: allow-l2") == 0, "write");
+    char *buf = read_all("/tmp/nlfreeze-f.tools");
+    ASSERT(buf != NULL, "read");
+    ASSERT(strstr(buf, "# @perm: allow-l2\n") != NULL, "policy line must be kept");
+    ASSERT(nl_freeze_verify("/tmp/nlfreeze-f.tools") == NL_FREEZE_OK, "verify with policy");
+    free(buf);
+
+    /* 改策略头 = 篡改（否则可以从外部"加回"允许绕过） */
+    buf = read_all("/tmp/nlfreeze-f.tools");
+    char *p = strstr(buf, "allow-l2");
+    ASSERT(p != NULL, "policy token");
+    memcpy(p, "allow-l9", 8);
+    FILE *f = fopen("/tmp/nlfreeze-f.tools", "w");
+    ASSERT(f != NULL, "rewrite");
+    fputs(buf, f); fclose(f); free(buf);
+    ASSERT(nl_freeze_verify("/tmp/nlfreeze-f.tools") == NL_FREEZE_TAMPERED, "policy tamper");
+
+    /* 只接受注释行 */
+    ASSERT(nl_freeze_write("/tmp/nlfreeze-g.tools", body, 1, "rm -rf /") != 0, "reject non-comment");
+    PASS();
+}
+
 int main(void)
 {
     printf("freeze tests\n");
@@ -110,6 +138,7 @@ int main(void)
     test_tamper_header();
     test_plain_file();
     test_missing_file();
+    test_policy_header_preserved();
     printf("\n%d/%d passed, %d failed\n", tests_passed, tests_run, tests_failed);
     return tests_failed == 0 ? 0 : 1;
 }

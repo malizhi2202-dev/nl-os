@@ -73,11 +73,13 @@ int main(int argc,char**argv){
     if(!s||s->count==0){fprintf(stderr,"无法解析 %s\n",fp);nl_script_free(s);return -1;}
     /* 固化：把当前脚本写成带校验和的 v2 格式 */
     if(do_freeze){
-        if(nl_freeze_write(fp, s->lines, s->count)!=0){
+        /* 策略头随固化保留（ADR-019 P-3）：否则 freeze 之后 allow-l2 静默失效 */
+        if(nl_freeze_write(fp, s->lines, s->count, s->perm_line)!=0){
             fprintf(stderr,"固化失败: %s\n",fp);nl_script_free(s);return -1;
         }
         printf("✅ 已固化 %s（%d 步，含 sha256 校验和）\n",fp,s->count);
         printf("   # @checksum: sha256:… （篡改后将被拒绝执行）\n");
+        if(s->perm_line) printf("   %s （仅豁免 L2）\n", s->perm_line);
         nl_script_free(s);return 0;
     }
 
