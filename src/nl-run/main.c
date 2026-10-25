@@ -1,6 +1,7 @@
 #include "script_parser.h"
 #include "nlc_api.h"
 #include "freeze.h"
+#include "snapshot.h"
 #include <ctype.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -46,6 +47,20 @@ static int run_command(const char *cmd, int timeout_ms)
     }
     if (!WIFEXITED(status)) return -1;
     return WEXITSTATUS(status);
+}
+
+/* 从已生成命令里提取目标路径（跳过 argv0 与 -flag） */
+static int collect_paths(const char *cmd, char paths[][512], int max)
+{
+    char buf[2048];
+    snprintf(buf, sizeof(buf), "%s", cmd);
+    int n = 0, idx = 0;
+    for (char *t = strtok(buf, " \t"); t && n < max; t = strtok(NULL, " \t"), idx++) {
+        if (idx == 0 || t[0] == '-') continue;
+        snprintf(paths[n], 512, "%.500s", t);
+        n++;
+    }
+    return n;
 }
 
 int main(int argc,char**argv){
@@ -94,6 +109,18 @@ int main(int argc,char**argv){
         if(nl_parse(s->lines[i],&r)!=0||!r.command){fprintf(stderr,"❌ 步骤 %d 失败: 无法解析\n",i+1);nl_script_free(s);nl_free();return i+1;}
         if(r.needs_confirm&&!s->allow_l2){printf("⚠️ 需要确认 (L%d): %s\n输入 yes 继续: ",r.perm_level,r.command);char yn[8];if(!fgets(yn,sizeof(yn),stdin)||strncmp(yn,"yes",3)!=0){printf("已取消\n");nl_parse_result_free(&r);nl_script_free(s);nl_free();return i+1;}}
         printf("  → %s\n",r.command);
+        if(!dry_run && (r.needs_confirm || r.perm_level >= 2)){
+            char ps[8][512];
+            const char *arr[8];
+            int np = collect_paths(r.command, ps, 8);
+            for(int k=0;k<np;k++) arr[k]=ps[k];
+            if(np > 0){
+                char sdir[1024];
+                NlSnapStatus st = nl_snapshot_take(arr, np, sdir, sizeof(sdir));
+                if(st==NL_SNAP_SKIPPED)
+                    fprintf(stderr,"⚠️ 步骤 %d 未留快照（超限或含敏感路径）\n", i+1);
+            }
+        }
         if(!dry_run){
             int rc = run_command(r.command, 5000);
             if(rc!=0){

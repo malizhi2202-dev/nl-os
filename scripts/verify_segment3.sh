@@ -49,6 +49,26 @@ head -c 160 "$WORK/out16.txt"; echo
 chk "AC-16 输出 JSON 数组" "head -c 1 '$WORK/out16.txt' | grep -q '\['"
 chk "AC-16 含 audit_id 字段" "grep -q 'audit_id' '$WORK/out16.txt'"
 
+echo "=== AC-14 L3 删除可撤销"
+mkdir -p "$WORK/ac14/sub"; printf 'ac14-content\n' > "$WORK/ac14/sub/f.txt"
+printf '删除 ac14\n' > "$WORK/del.tools"
+( cd "$WORK" && "$BUILD/nl-run" --freeze del.tools >/dev/null )
+out=$(cd "$WORK" && printf 'yes\n' | "$BUILD/nl-run" del.tools 2>&1)
+chk "AC-14 删除已执行" "[ ! -d '$WORK/ac14' ]"
+undo=$("$BUILD/nlsh" --undo 2>&1); echo "$undo"
+chk "AC-14 撤销成功" "echo '$undo' | grep -q '已撤销'"
+chk "AC-14 目录与内容已恢复" "[ -f '$WORK/ac14/sub/f.txt' ] && grep -q ac14-content '$WORK/ac14/sub/f.txt'"
+
+echo "=== AC-15 敏感路径不留快照"
+mkdir -p "$WORK/.ssh"; printf 'PRIVATE-KEY-MARKER\n' > "$WORK/.ssh/id_rsa"
+printf '删除 .ssh\n' > "$WORK/keys.tools"
+( cd "$WORK" && "$BUILD/nl-run" --freeze keys.tools >/dev/null )
+(cd "$WORK" && printf 'yes\n' | "$BUILD/nl-run" keys.tools >/dev/null 2>&1)
+chk "AC-15 敏感目录已删除" "[ ! -f '$WORK/.ssh/id_rsa' ]"
+chk "AC-15 快照中无敏感内容" "! grep -rq PRIVATE-KEY-MARKER '$STATE/nl-os/snapshots' 2>/dev/null"
+"$BUILD/nlsh" --undo >/dev/null 2>&1
+chk "AC-15 敏感文件未被恢复" "[ ! -f '$WORK/.ssh/id_rsa' ]"
+
 echo "---- 段 3 结果：pass=$pass fail=$fail"
 rm -rf "$STATE" "$WORK"
 [ "$fail" -eq 0 ]

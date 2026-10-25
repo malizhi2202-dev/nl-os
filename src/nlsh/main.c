@@ -5,6 +5,7 @@
 #include "capability_registry.h"
 #include "capability_scan.h"
 #include "audit.h"
+#include "snapshot.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,11 +16,12 @@ static void sigint_handler(int sig) { (void)sig; g_running=0; }
 static void print_usage(void) {
     printf("nlsh - NL-Shell\n");
     printf("用法: nlsh [--dry-run] [--verbose] [--no-model] [--registry PATH]\n");
-    printf("           [--scan] [--self-test] [--audit [--since N] [--limit N]] [-c cmd]\n");
+    printf("           [--scan] [--self-test] [--audit] [--undo [N]] [-c cmd]\n");
 }
 int main(int argc, char **argv) {
     int dry_run=0,verbose __attribute__((unused)) =0,no_model=0;
-    int do_scan=0, do_selftest=0, do_audit=0;
+    int do_scan=0, do_selftest=0, do_audit=0, do_undo=0;
+    int undo_n=1;
     long audit_since = 0;
     int audit_limit = 20;
     const char *registry_path=NULL;
@@ -29,12 +31,26 @@ int main(int argc, char **argv) {
         else if(strcmp(argv[i],"--scan")==0)do_scan=1;
         else if(strcmp(argv[i],"--self-test")==0)do_selftest=1;
         else if(strcmp(argv[i],"--audit")==0)do_audit=1;
+        else if(strcmp(argv[i],"--undo")==0){
+            do_undo=1;
+            if(i+1<argc && argv[i+1][0]>='1' && argv[i+1][0]<='9') undo_n=atoi(argv[++i]);
+        }
         else if(strcmp(argv[i],"--since")==0&&i+1<argc)audit_since=atol(argv[++i]);
         else if(strcmp(argv[i],"--limit")==0&&i+1<argc)audit_limit=atoi(argv[++i]); else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
     signal(SIGINT,sigint_handler);
     nl_history_init(getenv("HOME")?strcat(strcpy(malloc(256),getenv("HOME")),"/.nlsh_history"):NULL);
 
     const char *reg_path = registry_path ? registry_path : nl_cap_default_path();
+
+    if (do_undo) {
+        char err[256] = "";
+        if (nl_snapshot_undo(undo_n, err, sizeof(err)) != 0) {
+            fprintf(stderr, "nlsh: 撤销失败：%s\n", err[0] ? err : "未知原因");
+            return 1;
+        }
+        printf("✅ 已撤销第 %d 次快照\n", undo_n);
+        return 0;
+    }
 
     if (do_audit) {
         static char buf[16384];

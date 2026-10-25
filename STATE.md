@@ -8,8 +8,8 @@
 
 - **活跃 Change**: 无（`capability-protocol` 已完成并归档）
 - **活跃 Change**: `nl-capability-runtime`（段 1 完成；段 2 的模型无关部分完成，T11b 等模型；段 3 未开始）
-- **当前阶段**: DEV（段 3 进行中：固化 + 审计回放完成，快照/撤销待做）
-- **当前 Task**: T15（快照 + 撤销）
+- **当前阶段**: DEV（**段 1–3 全部完成**；段 3 验收 16/16；仅剩 T11b 等模型）
+- **当前 Task**: T11b（decoder 后端，blocked：本机无 GGUF 模型）
 - **中断任务**（来自 R1.5 清窗）: 无（T06–T08 即将继续）
 - **会话开始建议**:
   - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`（CHANGE/REQUIREMENT/DESIGN/TASK/TEST/REVIEW/UAT + 14 个 SUMMARY）
@@ -43,6 +43,7 @@
 - `[2026-10-25]` **CIP v1 定案**：五报文 / 两阶段 invoke-commit / plan 用 argv 数组 / effect 五类缺省 delete / 威胁模型"模型不可信、系统用户可信" — `@.specs/adr/016-cip-protocol.md`
 - `[2026-10-25]` **broker 独立进程 + fail-closed + ticket 一次性(TTL60s,args 哈希)** — `@.specs/adr/017-broker-process.md`
 - `[2026-10-25]` **执行面用子进程桥/最小实现，不引 libdbus/libcurl/TLS** — `@.specs/adr/018-capability-adapters.md`
+- `[2026-10-25]` **段 3 完成**：`.tools` 固化+校验、快照/撤销、审计回放；`verify_segment3.sh` 16 断言 0 失败
 - `[2026-10-25]` **规则槽位缺陷（已登记未修）**：`after_key` 会吃进句尾修饰词（`README.md 文件`、`demo 的文件夹`），影响命中率；改动需配套回归，见 LESSONS
 - `[2026-10-25]` **capability-protocol 归档**：CIP v1 全链路验收通过（`ctest 20/20`、`verify_all.sh` 31 断言），产物移至 `.specs/archive/2026-10-25-capability-protocol/`
 - `[2026-10-25]` **差异化假设被推翻并收窄**：安全执行层非空白（Belay/Leash/Pipelock 等 7 个项目）；新定位 = 端侧档位 + 零运行时 + 中文 — `@.specs/discovery/claim-verification.md`

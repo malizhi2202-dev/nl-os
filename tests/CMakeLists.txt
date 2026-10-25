@@ -241,3 +241,11 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/freeze_test.c)
     target_link_libraries(test_freeze PRIVATE nlc)
     add_test(NAME freeze COMMAND test_freeze)
 endif()
+
+# 快照与撤销（T15）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/snapshot_test.c)
+    add_executable(test_snapshot unit/snapshot_test.c)
+    target_include_directories(test_snapshot PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_snapshot PRIVATE nlc)
+    add_test(NAME snapshot COMMAND test_snapshot)
+endif()
