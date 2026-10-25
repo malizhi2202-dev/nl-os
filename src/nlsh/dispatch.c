@@ -227,39 +227,53 @@ static int suggest_from_keywords(const char *input, char out[3][NL_CAP_MAX_ID_LE
     return n;
 }
 
-/* 专用模型生成的命令是否可执行：
- *   1) 除 '|' 之外不许有任何 shell 元字符（管道是允许的，但只是"多段普通命令"）；
- *   2) 每一段的 argv0 必须是本机注册过的、**只读（L1）**能力 —— 模型生成的管道
- *      不许带写操作，否则 | 就成了绕过确认门的通道。
- * 返回 1 = 可以执行。 */
-static int gen_cmd_is_safe(const char *cmd)
+/* 专用模型生成的命令能不能执行？能则返回它需要的权限等级（1..3），不能返回 -1。
+ *
+ * 规则：
+ *   1) 除 '|' 之外不许有任何 shell 元字符（管道可以，但只是"多段普通命令"）；
+ *   2) 每一段的 argv0 必须是本机注册过的能力（否则模型会凭空发明命令）；
+ *   3) L4 一律不执行；**管道里**不允许出现会改系统的命令（每段 ≤ L2）；
+ *   4) 单条命令允许到 L3 —— 它会照常走确认门与快照，用户看得见要删什么。
+ *
+ * 早先这里只放行 L1（只读），结果 `创建文件夹` 模型明明给出了 `mkdir -p ~/documents`
+ * 也被丢掉，看起来就像"模型啥也理解不了"。写操作不该一刀切禁掉，它该走确认门。 */
+static int gen_cmd_perm(const char *cmd)
 {
-    if (!cmd || !*cmd) return 0;
+    if (!cmd || !*cmd) return -1;
     static const char *const BANNED_EXCEPT_PIPE = ";&$`><()[]{}*?!\\\'\"";
-    if (strpbrk(cmd, BANNED_EXCEPT_PIPE) != NULL) return 0;
+    if (strpbrk(cmd, BANNED_EXCEPT_PIPE) != NULL) return -1;
 
     char buf[512];
     snprintf(buf, sizeof(buf), "%s", cmd);
-    int stages = 0;
+    int stages = 0, max_perm = 0;
     char *save = NULL;
     for (char *t = strtok_r(buf, "|", &save); t; t = strtok_r(NULL, "|", &save)) {
         while (*t == ' ' || *t == '\t') t++;
-        if (!*t) return 0;
+        if (!*t) return -1;
         stages++;
-        if (stages > 4) return 0;
+        if (stages > 4) return -1;
 
         char a0[64];
         size_t i = 0;
         while (t[i] && t[i] != ' ' && t[i] != '\t' && i < sizeof(a0) - 1) { a0[i] = t[i]; i++; }
         a0[i] = '\0';
-        if (nl_shell_builtin_is(a0)) continue;
-        if (!g_reg) return 0;
-        char cid[NL_CAP_MAX_ID_LEN];
-        snprintf(cid, sizeof(cid), "cli:%s", a0);
-        const NlCapability *c = nl_cap_find(g_reg, cid);
-        if (!c || c->perm_level != 1) return 0;   /* 只读才放行 */
+
+        int perm;
+        if (nl_shell_builtin_is(a0)) {
+            perm = 1;
+        } else {
+            if (!g_reg) return -1;
+            char cid[NL_CAP_MAX_ID_LEN];
+            snprintf(cid, sizeof(cid), "cli:%s", a0);
+            const NlCapability *c = nl_cap_find(g_reg, cid);
+            if (!c) return -1;                 /* 本机没有这个能力：不许凭空发明 */
+            perm = c->perm_level;
+        }
+        if (perm >= 4) return -1;              /* L4 永远不执行 */
+        if (stages > 1 && perm > 2) return -1; /* 管道里不放会删/杀的命令 */
+        if (perm > max_perm) max_perm = perm;
     }
-    return stages > 0;
+    return stages > 0 ? max_perm : -1;
 }
 
 /* 统一打印出口：dispatch 自己负责输出（执行路径要与子进程输出交错） */
@@ -355,16 +369,10 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
          *   2) argv0 必须在本机能力注册表里（能力存在性）；
          *   3) 权限等级 L4 直接丢；L2/L3 仍然要确认（下面的确认门照常生效）。 */
         char gen[512];
-        if (cmdgen_enabled() && nl_cmdgen_generate(input, gen, sizeof(gen)) == 0 &&
-            gen_cmd_is_safe(gen)) {
-            char gargv0[64], gcap[NL_CAP_MAX_ID_LEN];
-            command_argv0(gen, gargv0, sizeof(gargv0));
-            snprintf(gcap, sizeof(gcap), "cli:%s", gargv0);
-            int is_builtin = nl_shell_builtin_is(gargv0);
-            if (is_builtin) snprintf(gcap, sizeof(gcap), "shell:%s", gargv0);
-            const NlCapability *gc = (g_reg && !is_builtin) ? nl_cap_find(g_reg, gcap) : NULL;
-            if (is_builtin || (gc && gc->perm_level <= 3)) {
-                int perm = is_builtin ? 1 : gc->perm_level;
+        if (cmdgen_enabled() && nl_cmdgen_generate(input, gen, sizeof(gen)) == 0) {
+            int gen_perm = gen_cmd_perm(gen);
+            if (gen_perm > 0) {
+                int perm = gen_perm;
                 memset(&r, 0, sizeof(r));
                 r.command = strdup(gen);
                 if (!r.command) return -1;

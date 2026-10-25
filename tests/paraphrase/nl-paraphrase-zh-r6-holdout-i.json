@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "留出集 I（ADR-025 续）：名字夹在动词和名词之间的创建类说法（用户报的「创建opendir目录」）。",
+    "写完直接跑、不调参；跑完即作废。"
+  ],
+  "format_version": 1,
+  "clusters": [
+    {
+      "cap": "create-dir-name-I",
+      "expect": "mkdir",
+      "desc": "创建/新建/建立 + 名字 + 目录/文件夹",
+      "utterances": [
+        "创建一个src目录",
+        "新建logs文件夹",
+        "建立assets目录",
+        "创建myapp文件夹",
+        "新建docs目录",
+        "创建三个目录" 
+      ]
+    }
+  ]
+}

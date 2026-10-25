@@ -301,6 +301,27 @@ static char *extract_object_before_verb(const char *input, const char *verb) {
     return raw;
 }
 
+/* 去掉前导量词/介绍词：`建一个 logs 文件夹` 的目标是 logs。 */
+static void strip_slot_lead(char *work)
+{
+    static const char *const LEAD_WORDS[] = { "一个", "叫做", "名为", "叫", "个", NULL };
+    for (int round = 0; round < 3; round++) {
+        int changed = 0;
+        for (int i = 0; LEAD_WORDS[i]; i++) {
+            size_t ll = strlen(LEAD_WORDS[i]);
+            size_t cur = strlen(work);
+            if (cur > ll && strncmp(work, LEAD_WORDS[i], ll) == 0 &&
+                (isspace((unsigned char)work[ll]) || (unsigned char)work[ll] >= 0x80)) {
+                memmove(work, work + ll, cur - ll + 1);
+                while (isspace((unsigned char)work[0])) memmove(work, work + 1, strlen(work));
+                changed = 1;
+                break;
+            }
+        }
+        if (!changed) break;
+    }
+}
+
 /* "A 到 B" 结构：取两个关键词**之间**的内容。
  * `复制 a.txt 到 /tmp` 的源在「复制」和「到」之间；用 after_key(复制) 会把
  * "a.txt 到 /tmp" 整段当源，生成 `cp -r a.txt 到 /tmp /tmp` 这种垃圾。
@@ -332,6 +353,7 @@ static char *extract_between(const char *input, const char *key) {
     free(work);
     if (!clean) return NULL;
     strip_slot_suffixes(clean);
+    strip_slot_lead(clean);
     if (!clean[0]) { free(clean); return NULL; }
     return clean;
 }
@@ -355,18 +377,7 @@ static char *extract_after_key_long(const char *input, const char *key) {
     if (final_len == 0) { free(work); return NULL; }
     work[final_len] = '\0';
 
-    /* 前导量词/介绍词：`建一个 logs 文件夹` 的目标是 logs */
-    static const char *const LEAD_WORDS[] = { "一个", "叫做", "名为", "叫", "个", NULL };
-    for (int i = 0; LEAD_WORDS[i]; i++) {
-        size_t ll = strlen(LEAD_WORDS[i]);
-        size_t cur = strlen(work);
-        if (cur > ll && strncmp(work, LEAD_WORDS[i], ll) == 0 &&
-            (isspace((unsigned char)work[ll]) || (unsigned char)work[ll] >= 0x80)) {
-            memmove(work, work + ll, cur - ll + 1);
-            while (isspace((unsigned char)work[0])) memmove(work, work + 1, strlen(work));
-            break;
-        }
-    }
+    strip_slot_lead(work);
 
     char *out = strip_wrapping_quotes(work);
     free(work);

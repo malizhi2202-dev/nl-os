@@ -37,6 +37,35 @@ typedef struct {
 
 static const NlRule RULES[] = {
 
+    /* ── 名字夹在动词和名词之间：「创建opendir目录」 ──
+     * 这类句子以前 two 头不靠：`叫` 类规则取不到名字（没有"叫"），
+     * filename 规则又要求带扩展名。用 between 取「创建」和「目录/文件夹」之间的内容。
+     * 必须排在「含创建/新建就建目录」的规则**前面**（它们更具体）。 */
+    {215, NL_INTENT_CREATE_DIR, 1,
+     {"创建", "目录", NULL},
+     {{"name", "between", "创建|目录"}, {NULL}},
+     "创建opendir目录"},
+    {216, NL_INTENT_CREATE_DIR, 1,
+     {"创建", "文件夹", NULL},
+     {{"name", "between", "创建|文件夹"}, {NULL}},
+     "创建opendir文件夹"},
+    {217, NL_INTENT_CREATE_DIR, 1,
+     {"新建", "目录", NULL},
+     {{"name", "between", "新建|目录"}, {NULL}},
+     "新建opendir目录"},
+    {218, NL_INTENT_CREATE_DIR, 1,
+     {"新建", "文件夹", NULL},
+     {{"name", "between", "新建|文件夹"}, {NULL}},
+     "新建opendir文件夹"},
+    {219, NL_INTENT_CREATE_DIR, 1,
+     {"建立", "目录", NULL},
+     {{"name", "between", "建立|目录"}, {NULL}},
+     "建立opendir目录"},
+    {220, NL_INTENT_CREATE_FILE, 2,
+     {"创建", "文件", NULL},
+     {{"name", "between", "创建|文件"}, {NULL}},
+     "创建opendir文件"},
+
     /* ── 把字句（宾语在动词前，ADR-024 续）──
      * 「把 error.log 删掉」和「删除 error.log」是同一件事，语序不同。
      * 必须排在各 delete/view 规则之前：否则「把 xx 删掉」会先被
