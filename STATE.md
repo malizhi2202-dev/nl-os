@@ -20,6 +20,7 @@
 |---|---|---|---|---|
 | 注册表格式冻结 | 决策 | DESIGN 必须先冻结 `format_version` + schema，否则不得拆段 2 任务（架构师条件） | 设计 | 2026-10-25 |
 | ARCHITECTURE.md 缺失 | 决策 | 架构级变更无沉淀处；建议 Phase 1 结束后跑一次 `A-architect` | 用户 | 2026-10-25 |
+| 模型常驻进程 | 决策 | 模型放 `nlsh` 进程内 还是 独立 `nl-infer` 守护进程？4GB 档冷启动要从 SD 读 400MB（约 13s），倾向常驻；**段 2 开工前必须定**（ADR-015 只定了内存/延迟预算，没定进程形态） | 用户 | 2026-10-25 |
 | 中文 benchmark 规模不足 | 决策 | 现 `models/benchmarks/nl-commands-zh.json` 仅 33 条，计划 1000 条 | 用户 | 2026-10-25 |
 | 模型未部署 | bug | 本机无 `/usr/share/nl-os/model.gguf`，`nlsh` 只能走规则层 | 用户 | 2026-10-25 |
 
