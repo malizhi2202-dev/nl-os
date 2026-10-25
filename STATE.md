@@ -8,7 +8,7 @@
 
 - **活跃 Change**: `capability-protocol`（CHANGE 阶段，待反问确认）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: CHANGE（新 change `capability-protocol`，0-change 反问中）
+- **当前阶段**: CHANGE 完成（G1 3/4 通过，强制条件 6 条 → 进入 REQUIREMENT）
 - **当前 Task**: —（新 change 尚在 CHANGE 阶段）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
