@@ -7,7 +7,7 @@
 ## 当前位置
 
 - **活跃 Change**: `nl-capability-runtime`
-- **当前阶段**: REQUIREMENT（REQUIREMENT.md 已产出；需求门 3/4 通过 → 进入 DESIGN）
+- **当前阶段**: DESIGN（DESIGN.md + ADR-012/013/014 已产出；G2 方案门 3/4 通过 → 进入 TASK）
 - **当前 Task**: —
 - **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
@@ -28,6 +28,7 @@
 - `[2026-10-25]` 永久放弃 `.nl` 完整编程语言，NL-C 收敛为 `.tools` — `@.specs/adr/011-drop-nl-language.md`
 - `[2026-10-25]` `.specs/` 纳入版本控制（此前被 `.gitignore` 忽略，TASK/ADR/SUMMARY 均未入库）
 - `[2026-10-25]` 决策层不走 Agent Loop，改为有限答案空间内的类型化判断（choice/score/noul） — `@.specs/nl-capability-runtime/CHANGE.md`
+- `[2026-10-25]` 注册表 JSONL + format_version 冻结；决策两阶段（粗筛 K=8 → GBNF Choice）；模型不得 deny；内置 SHA-256 — `@.specs/adr/012~014`
 - `[2026-07-01]` 一期 MVP 技术栈与十项架构决策 — `@.specs/adr/001~010`
 
 ## 已归档 Changes（最近 5 个，倒序）

@@ -73,6 +73,10 @@ NL-OS 是一个**自然语言驱动的操作系统交互层**。目标是把「�
 - `[2026-10-25]` **约束解码只用 llama.cpp 内置 GBNF**，不引入外部约束解码库（零新依赖）。
 - `[2026-10-25]` **能力注册表是能力的唯一真相**，规则库只引用能力 ID，不得各自硬编码清单。
 - `[2026-10-25]` **固化文件必须带校验和**，执行前校验；**快照排除敏感路径**（`~/.ssh`、`~/.gnupg`、`*.pem`、`*.key`、含 password/token/secret 的文件）。来自 G1 安全审计师条件。
+- `[2026-10-25]` **模型只能"多要确认"，不能"少要确认"**：`deny` 永远由规则层/`nl-perm` 给出，模型只能把 allow 抬升为 confirm（防提示注入）。`@.specs/adr/013-typed-decision-layer.md`
+- `[2026-10-25]` **决策走两阶段**：规则粗筛 top-K（K=8）→ 仅对 K 做 GBNF Choice，输出 ≤16 token。反对全量枚举 GBNF。
+- `[2026-10-25]` **Score 由规则计算，不调模型**（避免同一输入两次推理）。
+- `[2026-10-25]` **能力注册表格式 v1 冻结**：JSON Lines + `format_version` + `flock` + `rename` 原子写 + 权限 0600。`@.specs/adr/012-capability-registry.md`
 - `[2026-07-01]` **ADR-004** 模型选型流程：先建 benchmark（1000 条中文 NL→命令测试集）→ 跑分对比 → 数据驱动选型。对比维度：准确率/延迟/内存。来自 `@.specs/nl-os/CHANGE.md`
 - `[2026-07-01]` **ADR-005** 内核集成路线：Phase 1 用户态权限守护 → Phase 2 eBPF → Phase 3 评估 .ko 必要性。来自 `@.specs/nl-os/CHANGE.md`
 - `[2026-07-01]` **ADR-006** 依赖策略：fork+vendor ggml（锁定 commit）+ cJSON（v1.7.x），总外部依赖 ≤ 3（ggml + cJSON + 测试框架）。来自 `@.specs/nl-os/CHANGE.md` 多角色对抗
