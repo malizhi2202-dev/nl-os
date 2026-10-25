@@ -104,7 +104,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T01</depends_on>
 </task>
 
-<task id="T04" parallel="false" status="pending" auto="true">
+<task id="T04" parallel="false" status="done" auto="true">
   <name>裁决器：effect 从严 + 权限分级 + 保护路径（AC-3, AC-5）</name>
   <read_files>
     src/libnlc/path_safety.h

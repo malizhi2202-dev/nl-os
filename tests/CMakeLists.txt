@@ -140,3 +140,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/cip_test.c)
     target_link_libraries(test_cip PRIVATE nlc cjson)
     add_test(NAME cip COMMAND test_cip)
 endif()
+
+# 裁决器（T04 · capability-protocol；include .c 以复用 broker 侧单元）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/verdict_test.c)
+    add_executable(test_verdict unit/verdict_test.c)
+    target_include_directories(test_verdict PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_verdict PRIVATE nlc cjson)
+    add_test(NAME verdict COMMAND test_verdict)
+endif()
