@@ -8,7 +8,7 @@
 
 - **活跃 Change**: `capability-protocol`（CHANGE 阶段，待反问确认）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: CHANGE 完成（G1 3/4 通过，强制条件 6 条 → 进入 REQUIREMENT）
+- **当前阶段**: DESIGN 完成（需求门 3/4、G2 3/4 通过；REQUIREMENT + DESIGN + ADR-016/017/018 已产出 → 进入 TASK）
 - **当前 Task**: —（新 change 尚在 CHANGE 阶段）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
@@ -30,6 +30,9 @@
 - `[2026-10-25]` 永久放弃 `.nl` 完整编程语言，NL-C 收敛为 `.tools` — `@.specs/adr/011-drop-nl-language.md`
 - `[2026-10-25]` `.specs/` 纳入版本控制（此前被 `.gitignore` 忽略，TASK/ADR/SUMMARY 均未入库）
 - `[2026-10-25]` 决策层不走 Agent Loop，改为有限答案空间内的类型化判断（choice/score/noul） — `@.specs/nl-capability-runtime/CHANGE.md`
+- `[2026-10-25]` **CIP v1 定案**：五报文 / 两阶段 invoke-commit / plan 用 argv 数组 / effect 五类缺省 delete / 威胁模型"模型不可信、系统用户可信" — `@.specs/adr/016-cip-protocol.md`
+- `[2026-10-25]` **broker 独立进程 + fail-closed + ticket 一次性(TTL60s,args 哈希)** — `@.specs/adr/017-broker-process.md`
+- `[2026-10-25]` **执行面用子进程桥/最小实现，不引 libdbus/libcurl/TLS** — `@.specs/adr/018-capability-adapters.md`
 - `[2026-10-25]` **差异化假设被推翻并收窄**：安全执行层非空白（Belay/Leash/Pipelock 等 7 个项目）；新定位 = 端侧档位 + 零运行时 + 中文 — `@.specs/discovery/claim-verification.md`
 - `[2026-10-25]` **ADR-015 修正**：支持地板 = ARMv7-A/ARMv8-A + MMU + Linux + ≥128MB RAM；Tier A 细分 A1(128–768MB，仅 embedding)/A2(1–4GB)；**MCU/RTOS 家电（空调 Cortex-M0 128KB Flash）明确 out of scope**
 - `[2026-10-25]` **ADR-015 设备分档**：A(≤4GB) embedding 为主 / B(8-16GB) +0.5B decoder / C(≥32GB) +大模型；判断后端抽象、运行期自降档 — `@.specs/adr/015-device-tiers.md`
