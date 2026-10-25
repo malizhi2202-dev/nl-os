@@ -270,7 +270,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T09</depends_on>
 </task>
 
-<task id="T11" parallel="true" status="pending" auto="true">
+<task id="T11" parallel="true" status="done" auto="true">
   <name>mcp 客户端适配器：stdio JSON-RPC（反向吸收）</name>
   <read_files>
     src/nlbroker/adapter_cli.h
@@ -279,6 +279,8 @@ W5 HTTP+收口    T13[P] → T14                  │
   <write_files>
     src/nlbroker/adapter_mcp.c
     src/nlbroker/adapter_mcp.h
+    src/nlbroker/dispatch.c        <!-- 扩范围：mcp invoke/commit 分支 -->
+    src/nlbroker/main.c            <!-- 扩范围：--mcp-* 选项 -->
     tests/unit/adapter_mcp_test.c
     tests/fixtures/fake_mcp_server.py
   </write_files>

@@ -7,14 +7,17 @@
 #define NL_BROKER_DISPATCH_H
 
 #include "capability_registry.h"
+#include "adapter_mcp.h"
 
 #include <stddef.h>
 
 typedef struct {
     NlCapRegistry *registry;
+    NlMcpClient   *mcp;        /* v1 单个 MCP server；NULL 表示未配置 */
 } NlDispatch;
 
 int  nl_dispatch_init(NlDispatch *d, const char *registry_path);
+void nl_dispatch_set_mcp(NlDispatch *d, NlMcpClient *c);
 void nl_dispatch_free(NlDispatch *d);
 
 /* 与 NlLineHandler 同签名，便于注入 server */

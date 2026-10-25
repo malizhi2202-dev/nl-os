@@ -7,6 +7,7 @@
 #include "ticket.h"
 #include "adapter_cli.h"
 #include "adapter_dbus.h"
+#include "adapter_mcp.h"
 #include "audit.h"
 #include "cJSON.h"
 
@@ -33,6 +34,41 @@ int nl_dispatch_init(NlDispatch *d, const char *registry_path)
     d->registry = nl_cap_load(p, &err);
     if (!d->registry) d->registry = nl_cap_create();   /* 加载失败降级为空表 */
     return d->registry ? 0 : -1;
+}
+
+void nl_dispatch_set_mcp(NlDispatch *d, NlMcpClient *c)
+{
+    if (d) d->mcp = c;
+}
+
+/* 解析 mcp:<server>/<tool>；成功返回 0 */
+static int parse_mcp_id(const char *id, char *server, size_t scap,
+                        char *tool, size_t tcap)
+{
+    if (!id || strncmp(id, "mcp:", 4) != 0) return -1;
+    const char *p = id + 4;
+    const char *slash = strchr(p, '/');
+    if (!slash || slash == p || slash[1] == '\0') return -1;
+    size_t sl = (size_t)(slash - p);
+    size_t tl = strlen(slash + 1);
+    if (sl >= scap || tl >= tcap) return -1;
+    memcpy(server, p, sl);
+    server[sl] = '\0';
+    memcpy(tool, slash + 1, tl + 1);
+    return 0;
+}
+
+static int add_mcp_plan_json(cJSON *root, const char *server, const char *tool)
+{
+    cJSON *p = cJSON_CreateObject();
+    cJSON *m = cJSON_CreateObject();
+    if (!p || !m) return -1;
+    cJSON_AddStringToObject(m, "server", server);
+    cJSON_AddStringToObject(m, "tool", tool);
+    cJSON_AddItemToObject(p, "mcp", m);
+    cJSON_AddBoolToObject(p, "executed", 0);
+    cJSON_AddItemToObject(root, "plan", p);
+    return 0;
 }
 
 void nl_dispatch_free(NlDispatch *d)
@@ -227,11 +263,44 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         return set_payload(resp, root);
     }
 
+    char mcp_server[NL_MCP_NAME_MAX], mcp_tool[NL_MCP_NAME_MAX];
+    int is_mcp = (parse_mcp_id(c->id, mcp_server, sizeof(mcp_server),
+                               mcp_tool, sizeof(mcp_tool)) == 0);
+
+    if (is_mcp) {
+        if (!d->mcp ||
+            strcmp(nl_mcp_server_name(d->mcp), mcp_server) != 0) {
+            cJSON_Delete(root);
+            resp->ok = 0;
+            resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
+            return 0;
+        }
+        char token[NL_TICKET_TOKEN_LEN];
+        if (nl_ticket_issue(c->id, req->args_json, (int)c->effect, now_sec(), token) != 0) {
+            cJSON_Delete(root);
+            resp->ok = 0;
+            resp->error = NL_CIP_E_BAD_REQ;
+            return 0;
+        }
+        cJSON_AddStringToObject(root, "verdict",
+                                vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm");
+        cJSON_AddStringToObject(root, "reason", vr.reason);
+        (void)add_mcp_plan_json(root, mcp_server, mcp_tool);
+        cJSON_AddStringToObject(root, "ticket", token);
+        cJSON_AddNumberToObject(root, "ttl_ms", (double)(NL_TICKET_TTL_SEC * 1000));
+        cJSON_AddBoolToObject(root, "untrusted_effect_attempt", vr.untrusted_effect_attempt);
+        emit_audit(c->id, vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm",
+                   nl_cap_effect_str(c->effect), c->perm_level, "ok", reason_code(&vr, c),
+                   req->args_json, now_us() - t0);
+        resp->ok = 1;
+        return set_payload(resp, root);
+    }
+
     NlPlan plan;
     if (build_plan_for(c, req->args_json, &plan) != 0) {
         cJSON_Delete(root);
         resp->ok = 0;
-        resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;   /* v1 仅 cli:；其余在 W3–W5 */
+        resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
         return 0;
     }
 
@@ -281,6 +350,32 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         resp->ok = 0;
         resp->error = e;
         return 0;
+    }
+
+    char mcp_server[NL_MCP_NAME_MAX], mcp_tool[NL_MCP_NAME_MAX];
+    if (parse_mcp_id(c->id, mcp_server, sizeof(mcp_server), mcp_tool, sizeof(mcp_tool)) == 0) {
+        if (!d->mcp || strcmp(nl_mcp_server_name(d->mcp), mcp_server) != 0) {
+            resp->ok = 0;
+            resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
+            return 0;
+        }
+        char out_buf[NL_CLI_MAX_OUT];
+        int call_rc = nl_mcp_call_tool(d->mcp, mcp_tool, req->args_json,
+                                       out_buf, sizeof(out_buf));
+        cJSON *root = cJSON_CreateObject();
+        if (!root) return -1;
+        cJSON_AddStringToObject(root, "status", call_rc == 0 ? "ok" : "error");
+        cJSON_AddNumberToObject(root, "exit", call_rc == 0 ? 0 : 1);
+        cJSON_AddStringToObject(root, "output", call_rc == 0 ? out_buf : "");
+        cJSON_AddNullToObject(root, "snapshot_ref");
+        char aid[24] = "a-";
+        snprintf(aid + 2, sizeof(aid) - 2, "%ld", now_us());
+        cJSON_AddStringToObject(root, "audit_id", aid);
+        emit_audit(c->id, "commit", nl_cap_effect_str(c->effect), c->perm_level,
+                   call_rc == 0 ? "ok" : "error", "mcp-call",
+                   req->args_json, now_us() - t0);
+        resp->ok = 1;
+        return set_payload(resp, root);
     }
 
     NlPlan plan;

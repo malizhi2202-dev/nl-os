@@ -4,6 +4,7 @@
 #include "server.h"
 #include "dispatch.h"
 #include "adapter_dbus.h"
+#include "adapter_mcp.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -20,7 +21,8 @@ static void on_term(int sig)
 static void usage(void)
 {
     printf("nlbroker — NL-OS capability broker (CIP v1)\n");
-    printf("用法: nlbroker [--socket PATH] [--registry PATH] [--scan-dbus] [--dry-run]\n");
+    printf("用法: nlbroker [--socket PATH] [--registry PATH] [--scan-dbus]\n");
+    printf("                [--mcp-name NAME --mcp-cmd PATH [--mcp-arg ARG]...] [--dry-run]\n");
 }
 
 int main(int argc, char **argv)
@@ -31,12 +33,22 @@ int main(int argc, char **argv)
     const char *registry_path = NULL;
     int dry_run = 0;
     int scan_dbus = 0;
+    const char *mcp_name = NULL;
+    const char *mcp_cmd = NULL;
+    char *mcp_args[16];
+    int mcp_nargs = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--socket") == 0 && i + 1 < argc) {
             opts.socket_path = argv[++i];
         } else if (strcmp(argv[i], "--registry") == 0 && i + 1 < argc) {
             registry_path = argv[++i];
+        } else if (strcmp(argv[i], "--mcp-name") == 0 && i + 1 < argc) {
+            mcp_name = argv[++i];
+        } else if (strcmp(argv[i], "--mcp-cmd") == 0 && i + 1 < argc) {
+            mcp_cmd = argv[++i];
+        } else if (strcmp(argv[i], "--mcp-arg") == 0 && i + 1 < argc && mcp_nargs < 16) {
+            mcp_args[mcp_nargs++] = argv[++i];
         } else if (strcmp(argv[i], "--scan-dbus") == 0) {
             scan_dbus = 1;
         } else if (strcmp(argv[i], "--dry-run") == 0) {
@@ -85,9 +97,23 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    NlMcpClient *mcp = NULL;
+    if (mcp_cmd) {
+        const char *nm = mcp_name ? mcp_name : "mcp";
+        mcp = nl_mcp_start(nm, mcp_cmd, mcp_args, mcp_nargs);
+        if (!mcp) {
+            fprintf(stderr, "nlbroker: MCP server 启动或 initialize 失败 (%s)\n", mcp_cmd);
+        } else {
+            int added = nl_mcp_add_to_registry(mcp, disp.registry);
+            fprintf(stderr, "nlbroker: MCP %s 登记 %d 个工具\n", nm, added < 0 ? 0 : added);
+            nl_dispatch_set_mcp(&disp, mcp);
+        }
+    }
+
     nl_server_set_handler(nl_dispatch_line, &disp);
 
     int rc = nl_server_run(&opts);
+    if (mcp) nl_mcp_stop(mcp);
     nl_dispatch_free(&disp);
     if (rc != 0) {
         fprintf(stderr, "nlbroker: 启动失败 (%s)\n", opts.socket_path);

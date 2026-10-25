@@ -176,3 +176,13 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_dbus_test.c)
     target_link_libraries(test_adapter_dbus PRIVATE nlc cjson)
     add_test(NAME adapter_dbus COMMAND test_adapter_dbus)
 endif()
+
+# MCP 客户端适配器（T11）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_mcp_test.c)
+    add_executable(test_adapter_mcp unit/adapter_mcp_test.c)
+    target_include_directories(test_adapter_mcp PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_compile_definitions(test_adapter_mcp PRIVATE FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
+    target_link_libraries(test_adapter_mcp PRIVATE nlc cjson)
+    add_test(NAME adapter_mcp COMMAND test_adapter_mcp)
+endif()
