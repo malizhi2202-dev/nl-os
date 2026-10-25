@@ -5,10 +5,18 @@
 ## 快速开始
 
 ```bash
+# 无 root 安装到 ~/.local（推荐：装完直接敲 nlsh）
+bash scripts/install_local.sh
+nlsh --scan            # 首次：发现本机能力
+nlsh                   # 进入自然语言终端
+
+# 或者只在源码目录里试用
 mkdir build && cd build && cmake .. && make -j$(nproc)
-export NL_MODEL_PATH=/path/to/model.gguf
 ./nlsh
 ```
+
+模型会自动从 `$NL_MODEL_PATH` → `/usr/share/nl-os` → `~/.local/share/nl-os` 里找第一个 `*.gguf`，
+也可以用 `bash models/download_model.sh small` 下载（约 428MB）。
 
 ## 组件
 

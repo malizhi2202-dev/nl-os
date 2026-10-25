@@ -33,6 +33,14 @@ typedef struct NlModel NlModel;
 NlModel *nl_model_init(const char *model_path);
 
 /*
+ * 解析默认模型路径：$NL_MODEL_PATH，否则依次在 /usr/share/nl-os、
+ * $XDG_DATA_HOME/nl-os、~/.local/share/nl-os 里找第一个 gguf
+ * 返回第一个可读的 GGUF 路径（静态缓冲，调用者不需释放），全都不存在返回 NULL。
+ * 目的：本地安装（无 root）时不必每次 export NL_MODEL_PATH。
+ */
+const char *nl_model_default_path(void);
+
+/*
  * 获取模型元信息
  * 返回: 模型信息（调用者不需释放）
  */

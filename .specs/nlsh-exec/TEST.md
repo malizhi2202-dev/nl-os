@@ -10,9 +10,9 @@
 
 | 套件 | 命令 | 结果 |
 |---|---|---|
-| 单元测试 | `ctest`（Debug, ASan/UBSan） | **30/30 passed**（新增 `exec`，`budget` 扩到 5 组） |
-| 单元测试 | `ctest`（Release） | **30/30 passed** |
-| 本 change 验收 | `scripts/verify_exec.sh` | **36 通过 / 0 失败** |
+| 单元测试 | `ctest`（Debug, ASan/UBSan） | **31/31 passed**（新增 `exec`、`confirm`） |
+| 单元测试 | `ctest`（Release） | **31/31 passed** |
+| 本 change 验收 | `scripts/verify_exec.sh` | **49 通过 / 0 失败**（含 AC-11 统一确认门 13 条） |
 | 段 1 | `scripts/verify_segment1.sh` | pass=12 fail=0 |
 | 段 2 | `scripts/verify_segment2.sh` | 18 通过 / 0 失败（decoder 档） |
 | 段 3 | `scripts/verify_segment3.sh` | pass=16 fail=0 |
@@ -32,6 +32,9 @@
 | AC-8 无 shell 注入 | `exec_test`（9 反例 + 4 正例）+ `verify_exec.sh` AC-8 端到端 | ✅ |
 | AC-9 审计可追溯 | `verify_exec.sh` AC-9（6 条） | ✅ |
 | AC-10 不回归 | 上面的全套件 | ✅ |
+| AC-11 确认策略统一（ADR-019） | `confirm_test`（4 组）+ `verify_exec.sh` AC-11a~11f（13 条） | ✅ |
+| AC-12 本地安装可用 | 登录 shell `command -v nlsh` + 无 `NL_MODEL_PATH` 时模型自动发现 | ✅ |
+| AC-13 ARM64 交叉构建与运行 | 交叉构建 + `qemu-aarch64-static` 跑 scan/eval，数值与 x86_64 一致 | ✅（stub 模型） |
 
 ## 3. 证据（实跑输出摘录）
 

@@ -2,7 +2,13 @@
 
 - **Change ID**: `nlsh-exec`
 - **日期**: 2026-10-25
-- **自动化验收**: `bash scripts/verify_exec.sh`（36 断言，0 失败）
+- **自动化验收**: `bash scripts/verify_exec.sh`（49 断言，0 失败）
+- **先装一遍（不然只有 `./build/nlsh`）**:
+  ```bash
+  bash scripts/install_local.sh      # → ~/.local/bin/nlsh，模型自动从 ~/.local/share/nl-os 找
+  nlsh --scan                        # 首次扫描能力
+  ```
+  装完新开一个终端（或 `bash -lc`）就能直接敲 `nlsh`。
 - **人要用一遍的部分**: 下面 4 条，路径都在 `/tmp` 的临时目录里；其中场景 4 必须在真终端里敲（管道无法验 TTY 分支）
 
 ---
@@ -62,5 +68,5 @@ test -d repl-dir && echo OK
 
 | 角色 | 结论 | 备注 |
 |---|---|---|
-| AI 实跑（2026-10-25） | ✅ 场景 1–3；场景 4 的**非 TTY** 分支已验证（管道），**TTY 分支需你亲手试** | 明细见 `TEST.md` §3 |
+| AI 实跑（2026-10-25） | ✅ 场景 1–3；场景 4 的 TTY 分支已用 `pty.fork()` 驱动验证（中文回显 + 退格 + 落盘），仍需你用手感确认一次 | 明细见 `TEST.md` §3 与 `T10-SUMMARY.md` |
 | 用户 | ⏳ 待填 | 任一不符合请记场景编号 |

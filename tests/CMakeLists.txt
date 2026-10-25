@@ -276,3 +276,11 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/exec_test.c)
     target_link_libraries(test_exec PRIVATE nlc)
     add_test(NAME exec COMMAND test_exec)
 endif()
+
+# 统一确认门（ADR-019）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/confirm_test.c)
+    add_executable(test_confirm unit/confirm_test.c)
+    target_include_directories(test_confirm PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_confirm PRIVATE nlc)
+    add_test(NAME confirm COMMAND test_confirm)
+endif()

@@ -4,6 +4,8 @@
 #include "snapshot.h"
 #include "exec.h"
 #include "budget.h"
+#include "confirm.h"
+#include "audit.h"
 #include <ctype.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -11,12 +13,60 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+static long now_us(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long)ts.tv_sec * 1000000L + ts.tv_nsec / 1000L;
+}
+
+/* 取命令 argv0（去路径/去 sudo|env 前缀），用于审计里的 capability_id */
+static void step_argv0(const char *cmd, char *out, size_t cap)
+{
+    const char *p = cmd ? cmd : "";
+    while (*p == ' ') p++;
+    const char *end = p;
+    while (*end && *end != ' ') end++;
+    const char *base = p;
+    for (const char *q = p; q < end; q++) if (*q == '/') base = q + 1;
+    size_t n = (size_t)(end - base);
+    if (n >= cap) n = cap - 1;
+    memcpy(out, base, n);
+    out[n] = '\0';
+}
+
+/* 统一审计（ADR-019 P-5）：nl-run 之前完全不写审计，"谁在什么时候删了什么"查不到 */
+static void audit_step(const char *cmd, int perm_level, const char *result,
+                       const char *reason, long dur_us)
+{
+    char a0[64], id[NL_CAP_MAX_ID_LEN];
+    NlAuditRec rec;
+    step_argv0(cmd, a0, sizeof(a0));
+    if (a0[0]) snprintf(id, sizeof(id), "cli:%s", a0); else id[0] = '\0';
+    memset(&rec, 0, sizeof(rec));
+    rec.capability_id = a0[0] ? id : NULL;
+    rec.perm_level = perm_level;
+    rec.verdict = (perm_level >= 2) ? "confirm" : "allow";
+    rec.effect = (perm_level >= 3) ? "delete" : (perm_level >= 2 ? "write" : "read");
+    rec.fast_path = 0;
+    rec.probability = -1;
+    rec.duration_us = dur_us;
+    rec.result = result;
+    rec.reason = reason;
+    rec.input = NULL;
+    rec.corr = "";
+    (void)nl_audit_emit(&rec);
+}
+
 int main(int argc,char**argv){
     if(argc<2){fprintf(stderr,"用法: nl-run <file.tools>\n");return -1;}
     int dry_run=0, do_freeze=0;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--dry-run")==0)dry_run=1;
         else if(strcmp(argv[i],"--freeze")==0)do_freeze=1;
+        else if(strcmp(argv[i],"--yes")==0)setenv("NL_ASSUME_YES","1",1);   /* ADR-019 P-3 */
     }
     const char *fp=argv[argc-1];
     NlScript *s=nl_script_parse(fp);
@@ -45,7 +95,7 @@ int main(int argc,char**argv){
             /* 固化脚本自带确定性命令，不需要模型 */
             fprintf(stderr,"⚠️ 使用固化脚本（不经模型）\n");
         }else{
-            const char *mp=getenv("NL_MODEL_PATH");if(!mp)mp="/usr/share/nl-os/model.gguf";
+            const char *mp=nl_model_default_path();if(!mp)mp="/usr/share/nl-os/model.gguf";
             if(nl_init(mp)!=0){fprintf(stderr,"模型加载失败\n");nl_script_free(s);return -1;}
         }
     }
@@ -65,7 +115,15 @@ int main(int argc,char**argv){
         }
         NlParseResult r;
         if(nl_parse(s->lines[i],&r)!=0||!r.command){fprintf(stderr,"❌ 步骤 %d 失败: 无法解析\n",i+1);nl_script_free(s);nl_free();return i+1;}
-        if(r.needs_confirm&&!s->allow_l2){printf("⚠️ 需要确认 (L%d): %s\n输入 yes 继续: ",r.perm_level,r.command);char yn[8];if(!fgets(yn,sizeof(yn),stdin)||strncmp(yn,"yes",3)!=0){printf("已取消\n");nl_parse_result_free(&r);nl_script_free(s);nl_free();return i+1;}}
+        if(!dry_run){
+            /* 统一确认门（ADR-019）：allow_l2 只豁免 L2，L3+ 一律问；回答词表与 nlsh 一致 */
+            int need = nl_confirm_required(r.needs_confirm, r.perm_level);
+            if(need && s->allow_l2 && r.perm_level <= 2) need = 0;
+            if(need && !nl_confirm_ask(r.command, r.perm_level)){
+                audit_step(r.command, r.perm_level, "cancelled", "user-declined", 0);
+                nl_parse_result_free(&r);nl_script_free(s);nl_free();return NL_CONFIRM_EXIT_CANCELLED;
+            }
+        }
         printf("  → %s\n",r.command);
         if(!dry_run && (r.needs_confirm || r.perm_level >= 2)){
             char ps[8][512];
@@ -80,11 +138,15 @@ int main(int argc,char**argv){
             }
         }
         if(!dry_run){
+            long t0_us = now_us();
             int rc = nl_exec_execute(r.command, 5000);
+            long dur = now_us() - t0_us;
             if(rc!=0){
+                audit_step(r.command, r.perm_level, "error", "exec-failed", dur);
                 fprintf(stderr,"❌ 步骤 %d 失败: 退出码 %d\n",i+1,rc);
                 nl_parse_result_free(&r);nl_script_free(s);nl_free();return i+1;
             }
+            audit_step(r.command, r.perm_level, "ok", "executed", dur);
         }
         nl_parse_result_free(&r);
     }

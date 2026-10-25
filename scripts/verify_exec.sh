@@ -95,6 +95,54 @@ printf 'yes\n' | "$BUILD/nl-run" nr.tools >/dev/null 2>&1
 chk "nl-run 仍能执行固化脚本" "[ -d nr_dir ]"
 chk "nl-run 拒绝复合语义" "printf '每天备份并清理原文件\\n' > bad.tools && printf 'yes\\n' | '$BUILD/nl-run' bad.tools >/dev/null 2>&1; [ \$? -ne 0 ]"
 
+
+echo "=== AC-11 确认策略统一（ADR-019）"
+# 11a 回答词表：nl-run 也认 y（曾经 y = 取消）
+rm -rf pol_dir && printf '创建一个叫 pol_dir 的文件夹\n' > pol.tools
+"$BUILD/nl-run" --freeze pol.tools >/dev/null 2>&1
+printf 'y\n' | "$BUILD/nl-run" pol.tools >/dev/null 2>&1
+chk "AC-11a nl-run 接受 y" "[ -d pol_dir ]"
+
+# 11b 取消退出码统一为 3
+rm -rf pol_dir2 && printf '创建一个叫 pol_dir2 的文件夹\n' > pol2.tools
+"$BUILD/nl-run" --freeze pol2.tools >/dev/null 2>&1
+printf 'no\n' | "$BUILD/nl-run" pol2.tools >/dev/null 2>&1; rc=$?
+chk "AC-11b nl-run 取消退出码 3" "[ $rc -eq 3 ]"
+chk "AC-11b 未执行" "[ ! -d pol_dir2 ]"
+printf 'no\n' | "$NLSH" --no-model -c '创建一个叫 pol_dir3 的文件夹' >/dev/null 2>&1; rc=$?
+chk "AC-11b nlsh 取消退出码 3" "[ $rc -eq 3 ]"
+chk "AC-11b nlsh 未执行" "[ ! -d pol_dir3 ]"
+
+# 11c # @perm: allow-l2 只豁免 L2，不再豁免 L3 删除
+rm -rf pol_keep && mkdir -p pol_keep && echo keep > pol_keep/f.txt
+printf '# @perm: allow-l2\n删除 pol_keep\n' > pol3.tools
+"$BUILD/nl-run" --freeze pol3.tools >/dev/null 2>&1
+printf 'no\n' | "$BUILD/nl-run" pol3.tools >/dev/null 2>&1
+chk "AC-11c L3 删除仍要确认（allow-l2 不豁免）" "[ -d pol_keep ]"
+printf 'yes\n' | "$BUILD/nl-run" pol3.tools >/dev/null 2>&1
+chk "AC-11c 确认后执行" "[ ! -d pol_keep ]"
+
+# 11d --yes 与 NL_ASSUME_YES 等价
+rm -rf pol_yes && "$BUILD/nl-run" --yes --freeze pol4.tools >/dev/null 2>&1 || true
+printf '创建一个叫 pol_yes 的文件夹\n' > pol4.tools
+"$BUILD/nl-run" --freeze pol4.tools >/dev/null 2>&1
+"$BUILD/nl-run" --yes pol4.tools >/dev/null 2>&1
+chk "AC-11d nl-run --yes 跳过确认" "[ -d pol_yes ]"
+rm -rf pol_yes2 && "$NLSH" --no-model --yes -c '创建一个叫 pol_yes2 的文件夹' >/dev/null 2>&1
+chk "AC-11d nlsh --yes 跳过确认" "[ -d pol_yes2 ]"
+
+# 11e 快路径破坏性命令留快照，可撤销
+rm -rf fast_keep && mkdir fast_keep && echo precious > fast_keep/v.txt
+"$NLSH" --no-model -c 'rm -rf fast_keep' >/dev/null 2>&1
+chk "AC-11e 快路径 rm 已执行（传统命令语义）" "[ ! -d fast_keep ]"
+"$NLSH" --no-model --undo >/dev/null 2>&1
+chk "AC-11e 撤销后恢复" "[ -f fast_keep/v.txt ] && grep -q precious fast_keep/v.txt"
+
+# 11f nl-run 写审计
+"$NLSH" --no-model --audit --since 0 --limit 300 > "$WORK/audit2.json" 2>&1
+chk "AC-11f nl-run 步骤进审计" "grep -q '\"result\":\"ok\"' '$WORK/audit2.json'"
+chk "AC-11f 取消进审计" "grep -q 'user-declined' '$WORK/audit2.json'"
+
 echo
 echo "=== 结果：$pass 通过 / $fail 失败"
 rm -rf "$STATE" "$WORK"

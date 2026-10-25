@@ -2,6 +2,7 @@
 #include "nlc_api.h"
 #include "ipc_client.h"
 #include "exec.h"
+#include "confirm.h"
 #include "audit.h"
 #include "budget.h"
 #include "snapshot.h"
@@ -84,6 +85,19 @@ static void command_argv0(const char *cmd, char *out, size_t cap)
     out[n] = '\0';
 }
 
+/* 快路径里"敲下去就没了"的命令：不问，但执行前留快照（ADR-019 P-5） */
+static int fast_path_destructive(const char *cmd)
+{
+    static const char *const DESTRUCTIVE[] = {
+        "rm", "mv", "dd", "shred", "truncate", "mkfs", "fdisk", "wipefs", NULL
+    };
+    char a0[64];
+    command_argv0(cmd, a0, sizeof(a0));
+    for (int i = 0; DESTRUCTIVE[i]; i++)
+        if (strcmp(a0, DESTRUCTIVE[i]) == 0) return 1;
+    return 0;
+}
+
 /* 候选能力：按公共前缀 + 子串命中粗排，取前 3（避免自引用拷贝，用独立数组） */
 typedef struct { int score; char id[NL_CAP_MAX_ID_LEN]; } NlCand;
 
@@ -162,33 +176,6 @@ static int suggest_from_keywords(const char *input, char out[3][NL_CAP_MAX_ID_LE
     return n;
 }
 
-/* ── 确认门 ── */
-
-static int assume_yes(void)
-{
-    const char *v = getenv("NL_ASSUME_YES");
-    return v && (v[0] == '1' || v[0] == 'y' || v[0] == 'Y');
-}
-
-static int is_affirmative(const char *line)
-{
-    while (*line == ' ' || *line == '\t') line++;
-    return strncmp(line, "y", 1) == 0 || strncmp(line, "Y", 1) == 0 ||
-           strncmp(line, "是", strlen("是")) == 0;
-}
-
-/* 确认：返回 1 = 继续执行，0 = 用户取消（含 EOF：fail-closed） */
-static int confirm(const char *cmd, int perm_level)
-{
-    if (assume_yes()) return 1;
-    printf("⚠️ 需要确认 (L%d): %s\n执行? [y/N] ", perm_level, cmd);
-    fflush(stdout);
-    char yn[32];
-    if (!fgets(yn, sizeof(yn), stdin)) { printf("\n已取消（无输入）\n"); return 0; }
-    if (!is_affirmative(yn)) { printf("已取消（未执行）\n"); return 0; }
-    return 1;
-}
-
 /* 统一打印出口：dispatch 自己负责输出（执行路径要与子进程输出交错） */
 static void say(const char *text)
 {
@@ -209,6 +196,18 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
             return 0;
         }
         long t0 = now_us();
+        int destructive = fast_path_destructive(input);
+        if (destructive) {
+            char ps[8][NL_EXEC_PATH_MAX];
+            const char *arr[8];
+            int np = nl_exec_collect_paths(input, ps, 8);
+            for (int k = 0; k < np; k++) arr[k] = ps[k];
+            if (np > 0) {
+                char sdir[1024];
+                if (nl_snapshot_take(arr, np, sdir, sizeof(sdir)) == NL_SNAP_SKIPPED)
+                    fprintf(stderr, "⚠️ 未留快照（超限或含敏感路径）——这条命令将无法撤销\n");
+            }
+        }
         FILE *fp = popen(input, "r");
         if (!fp) {
             snprintf(output, out_sz, "(error)");
@@ -220,7 +219,8 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
         output[n] = '\0';
         int rc = pclose(fp);
         say(output);
-        audit_emit(input, "fastpath", "allow", (rc == 0) ? "ok" : "error", "fast-path", 1, now_us() - t0);
+        audit_emit(input, "fastpath", "allow", (rc == 0) ? "ok" : "error",
+                   destructive ? "fast-path-destructive" : "fast-path", 1, now_us() - t0);
         return 0;
     }
 
@@ -313,13 +313,13 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
         return 0;
     }
 
-    /* ── 确认门：写操作 / L2+ 才问（AC-3/AC-4） ── */
-    int need_confirm = r.needs_confirm || r.perm_level >= 2;
-    if (need_confirm && !confirm(r.command, r.perm_level)) {
+    /* ── 确认门：统一策略（ADR-019），写操作 / L2+ 才问 ── */
+    int need_confirm = nl_confirm_required(r.needs_confirm, r.perm_level);
+    if (need_confirm && !nl_confirm_ask(r.command, r.perm_level)) {
         snprintf(output, out_sz, "已取消：%s", r.command);
         audit_emit(input, cap_id, "confirm", "cancelled", "user-declined", 0, 0);
         nl_parse_result_free(&r);
-        return -1;
+        return NL_CONFIRM_EXIT_CANCELLED;
     }
 
     /* ── 权限裁决（perm.sock 存在时问一次；不存在则跳过，不阻塞） ── */

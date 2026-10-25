@@ -6,6 +6,7 @@
 #include "capability_scan.h"
 #include "audit.h"
 #include "snapshot.h"
+#include "confirm.h"
 #include "decision.h"
 #include "decision_model.h"
 #include "nl_eval.h"
@@ -18,7 +19,7 @@ static volatile int g_running=1;
 static void sigint_handler(int sig) { (void)sig; g_running=0; }
 static void print_usage(void) {
     printf("nlsh - NL-Shell\n");
-    printf("用法: nlsh [--dry-run] [--verbose] [--no-model] [--registry PATH]\n");
+    printf("用法: nlsh [--dry-run] [--yes] [--verbose] [--no-model] [--registry PATH]\n");
     printf("           [--scan] [--self-test] [--audit] [--undo [N]] [-c cmd]\n");
     printf("           [--decide 自然语言]   只做决策（候选收缩 + 受约束 Choice），不执行\n");
     printf("           [--eval FILE]         跑中文评测集，输出逐条决策 + 汇总\n");
@@ -66,8 +67,8 @@ static int run_decide(const char *reg_path, const char *input, int no_model) {
     if (c.count == 0) {
         method = "no-candidate";
     } else if (be == NL_BACKEND_LLM && !no_model) {
-        const char *mp = getenv("NL_MODEL_PATH");
-        if (!mp || !mp[0]) mp = "/usr/share/nl-os/model.gguf";
+        const char *mp = nl_model_default_path();
+        if (!mp) mp = "/usr/share/nl-os/model.gguf";
         NlModel *m = nl_model_init(mp);
         if (!m) {
             /* 模型缺席：降档到规则 top-1，不阻塞 */
@@ -140,7 +141,7 @@ int main(int argc, char **argv) {
     char *cmd=NULL;
     const char *decide_input=NULL;
     const char *eval_path=NULL;
-    for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
+    for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--yes")==0)setenv("NL_ASSUME_YES","1",1); else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
         else if(strcmp(argv[i],"--registry")==0&&i+1<argc)registry_path=argv[++i];
         else if(strcmp(argv[i],"--scan")==0)do_scan=1;
         else if(strcmp(argv[i],"--self-test")==0)do_selftest=1;
@@ -218,7 +219,7 @@ int main(int argc, char **argv) {
         if (be == NL_BACKEND_EMBEDDING) {
             fprintf(stderr,"ℹ️ 档位 %d：decoder 未启用（仅规则/向量粗筛）\n", tier);
         } else {
-            const char *mp=getenv("NL_MODEL_PATH"); if(!mp)mp="/usr/share/nl-os/model.gguf";
+            const char *mp=nl_model_default_path(); if(!mp)mp="/usr/share/nl-os/model.gguf";
             if(nl_init(mp)!=0) fprintf(stderr,"⚠️ 模型加载失败，降档到规则引擎\n");
         }
     }
@@ -234,7 +235,8 @@ int main(int argc, char **argv) {
         /* dispatch 自己负责打印（执行路径需要与子进程输出交错） */
         int rc = nl_dispatch(cmd,out,sizeof(out),dry_run);
         if (reg) nl_cap_free(reg);
-        return rc == 0 ? 0 : 1;
+        /* 退出码统一（ADR-019 P-4）：0 成功 / 1 失败或拒绝 / 3 用户取消 */
+        return rc == 0 ? 0 : (rc == NL_CONFIRM_EXIT_CANCELLED ? NL_CONFIRM_EXIT_CANCELLED : 1);
     } else {
         printf("NL-Shell v0.1 · 输入自然语言或传统命令 · Ctrl+C 中断 · Ctrl+D 退出\n");
         fflush(stdout);

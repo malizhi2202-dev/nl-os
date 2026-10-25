@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-10-25 · 统一确认门 + 本地安装 + 三项目标实测（change `nlsh-exec` 续）
+
+**新增（ADR-019 统一确认门）**
+
+- 三套确认策略收敛为一套：`nl_confirm_required` / `nl_confirm_yes` / `nl_confirm_assume_yes` / `nl_confirm_ask`
+- **行为变化**：`nl-run` 也接受 `y`（原来 `y` = 取消）；两处取消统一退出码 **3**；
+  `# @perm: allow-l2` 收窄为"只豁免 L2"（原来实际会豁免 L3 删除）；
+  `nl-run` 每步写审计（之前完全没有）；`nlsh` 快路径的破坏性命令（rm/mv/dd/…）执行前留快照，
+  审计 `reason=fast-path-destructive`——手滑 `rm -rf` 现在能 `--undo`
+- 新增开关 `nlsh --yes` / `nl-run --yes`（等价 `NL_ASSUME_YES=1`）
+- 专家团讨论记录与决策：`.specs/adr/019-unified-confirm-gate.md`
+
+**可用性**
+
+- `bash scripts/install_local.sh`：无 root 装到 `~/.local`，装完直接 `nlsh`（不再只认 `./build/nlsh`）
+- 模型路径自动发现：`$NL_MODEL_PATH` → `/usr/share/nl-os` → `$XDG_DATA_HOME/nl-os` → `~/.local/share/nl-os`
+- 修 `BUILD_STUB_MODEL=ON` 下 `nl_model_default_path` 未定义（交叉构建链接时暴露）
+
+**验证补齐（此前记为"未验证"的三项）**
+
+| 项 | 结论 |
+|---|---|
+| IME / TTY 分支 | ✅ 用 `pty.fork()` 驱动真终端：中文回显、命令正确、目录落盘；退格删一个完整汉字无残字 |
+| ARM64 | ✅ 无 root 装交叉工具链 → 构建通过 → `qemu-aarch64-static` 下 scan/eval 跑通，评测数值与 x86_64 完全一致（stub 模型；真机需交叉编 llama） |
+| C 档 3B–7B | ❌ 仍不可测：可用内存 545MB，3B q4 需 ~3GB；档位映射已测（`NL_TIER=4` → backend decoder） |
+
+**回归**：`ctest` 31/31（Debug+Release）、`verify_exec.sh` 49/49、段 1/2/3 = 12/18/16、`verify_all.sh` 0 失败
+
 ## 2026-10-25 · nlsh 执行接线：说一句就生效，且先说清边界（change `nlsh-exec`）
 
 **修复（安全优先）**

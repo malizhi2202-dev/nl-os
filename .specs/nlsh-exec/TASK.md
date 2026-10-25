@@ -42,6 +42,26 @@
 - **verify**: 脚本 0 失败；`ctest` 全绿
 - **auto**: true
 
+### T07 · 快路径懒加载（用户追问后追加）
+- **write_files**: `src/nlsh/main.c`
+- **verify**: `nlsh -c 'echo hi'` 30ms → 0–10ms；ctest/verify_exec/段1/段3 全绿
+- **auto**: true
+
+### T08 · 统一确认门（ADR-019，专家团讨论后追加）
+- **write_files**: `src/libnlc/confirm.c/.h`（新）、`src/nlsh/dispatch.c`、`src/nlsh/main.c`、`src/nl-run/main.c`、`tests/unit/confirm_test.c`、`scripts/verify_exec.sh`
+- **verify**: `test_confirm` 4/4；`verify_exec.sh` AC-11a~11f 全绿
+- **auto**: true
+
+### T09 · 本地安装与模型自动发现（用户反馈 `nlsh: command not found` 后追加）
+- **write_files**: `scripts/install_local.sh`（新）、`CMakeLists.txt`（RPATH + `NL_INSTALL_SYSTEM_FILES`）、`src/libnlc/model_loader.c/.h`、4 处调用点
+- **verify**: 登录 shell 里 `command -v nlsh` 命中；未设 `NL_MODEL_PATH` 时 `--decide` 走出 `choice-llm`
+- **auto**: true
+
+### T10 · 三项"未验证目标"实测
+- **write_files**: 无代码（仅验证记录与本 SUMMARY）
+- **verify**: pty 驱动 TTY 中文/退格、ARM64 交叉构建 + qemu 跑评测、C 档内存硬数字
+- **auto**: true
+
 ### T06 · 文档与 STATE
 - **write_files**: `.specs/nlsh-exec/{TEST,REVIEW}^*.md`、`.specs/nl-capability-runtime/UAT.md`、`.specs/CHANGELOG.md`、`.specs/LESSONS.md`、`STATE.md`、`README.md`
 - **verify**: 文档与实现一致（命令贴的是实跑输出）

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <math.h>
 
 #ifdef GGML_USE_CPU
@@ -28,6 +29,47 @@ struct NlModel {
     double confidence;
 #endif
 };
+
+/* 在目录里找第一个 *.gguf（按目录顺序；候选名差异足够，不必排序） */
+static int find_gguf_in(const char *dir, char *out, size_t cap)
+{
+    if (!dir || !dir[0]) return 0;
+    DIR *d = opendir(dir);
+    if (!d) return 0;
+    int found = 0;
+    struct dirent *ent;
+    while (!found && (ent = readdir(d)) != NULL) {
+        size_t n = strlen(ent->d_name);
+        if (n < 7 || strcmp(ent->d_name + n - 5, ".gguf") != 0) continue;
+        snprintf(out, cap, "%s/%s", dir, ent->d_name);
+        if (access(out, R_OK) == 0) found = 1;
+    }
+    closedir(d);
+    return found;
+}
+
+const char *nl_model_default_path(void)
+{
+    static char buf[1024];
+    const char *env = getenv("NL_MODEL_PATH");
+    /* 显式指定就尊重它（即使读不到也要原样返回，让调用方按"模型不可用"处理） */
+    if (env && env[0]) return env;
+
+    if (find_gguf_in("/usr/share/nl-os", buf, sizeof(buf))) return buf;
+
+    char dir[512];
+    const char *xdg = getenv("XDG_DATA_HOME");
+    const char *home = getenv("HOME");
+    if (xdg && xdg[0]) {
+        snprintf(dir, sizeof(dir), "%s/nl-os", xdg);
+        if (find_gguf_in(dir, buf, sizeof(buf))) return buf;
+    }
+    if (home && home[0]) {
+        snprintf(dir, sizeof(dir), "%s/.local/share/nl-os", home);
+        if (find_gguf_in(dir, buf, sizeof(buf))) return buf;
+    }
+    return NULL;
+}
 
 #ifdef GGML_USE_CPU
 

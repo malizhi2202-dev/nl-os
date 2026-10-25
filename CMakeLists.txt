@@ -14,6 +14,11 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror
     -Wno-unused-function)
 add_compile_definitions(_GNU_SOURCE)  # Linux POSIX: PATH_MAX, realpath, strdup, strndup
 
+# 本地安装（非 root）时二进制要能找到同前缀下的 libnlc.so。
+# 必须在任何 add_library/add_executable 之前设置：目标属性在建目标时从变量初始化。
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+
 # Debug 模式下额外选项
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
     add_compile_options(-g -O0 -fsanitize=address -fsanitize=undefined)
@@ -78,6 +83,7 @@ add_library(nlc SHARED
     src/libnlc/freeze.c
     src/libnlc/snapshot.c
     src/libnlc/exec.c
+    src/libnlc/confirm.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)
 target_link_libraries(nlc PUBLIC cjson Threads::Threads m)
@@ -144,9 +150,13 @@ install(TARGETS nlc nlsh nl-perm nl-run
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
 )
-install(FILES etc/nlsh.conf DESTINATION /etc/nl-os/)
-install(FILES etc/perm_rules.conf DESTINATION /etc/nl-os/)
-install(FILES etc/nl-perm.service DESTINATION /usr/lib/systemd/system/)
+# 系统级配置需要 root；无 root 安装（--prefix ~/.local）时用 -DNL_INSTALL_SYSTEM_FILES=OFF 跳过
+option(NL_INSTALL_SYSTEM_FILES "Install /etc and systemd unit (needs root)" ON)
+if(NL_INSTALL_SYSTEM_FILES)
+    install(FILES etc/nlsh.conf DESTINATION /etc/nl-os/)
+    install(FILES etc/perm_rules.conf DESTINATION /etc/nl-os/)
+    install(FILES etc/nl-perm.service DESTINATION /usr/lib/systemd/system/)
+endif()
 
 # ============================================================
 # 测试（ADR-009）

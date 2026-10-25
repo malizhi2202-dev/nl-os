@@ -143,8 +143,8 @@ int nl_eval_run(const char *reg_path, const char *bench_path)
     NlBackend be = nl_backend_for_tier(tier);
     NlModel *m = NULL;
     if (be == NL_BACKEND_LLM) {
-        const char *mp = getenv("NL_MODEL_PATH");
-        if (!mp || !mp[0]) mp = "/usr/share/nl-os/model.gguf";
+        const char *mp = nl_model_default_path();
+        if (!mp) mp = "/usr/share/nl-os/model.gguf";
         m = nl_model_init(mp);
         if (!m) {
             fprintf(stderr, "nlsh: 模型不可用，降档到规则层继续评测\n");
