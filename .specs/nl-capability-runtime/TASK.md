@@ -98,7 +98,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on>T01</depends_on>
 </task>
 
-<task id="T03" parallel="true" status="pending" auto="true">
+<task id="T03" parallel="true" status="done" auto="true">
   <name>capability_scan：白名单目录扫描 + lstat/symlink 标记 + 权限映射（未登记 L4）</name>
   <read_files>
     .specs/adr/012-capability-registry.md
@@ -109,6 +109,8 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <write_files>
     src/libnlc/capability_scan.c
     src/libnlc/capability_perm_map.h
+    src/libnlc/capability_registry.c   <!-- 扩范围：修 T02 遗留的 inode int 截断 -->
+    src/libnlc/capability_registry.h   <!-- 扩范围：新增 nl_cap_at() 只读遍历（冲突 id 无法 find 反查） -->
     tests/unit/capability_scan_test.c
   </write_files>
   <action>

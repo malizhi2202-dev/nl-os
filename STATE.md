@@ -7,8 +7,8 @@
 ## 当前位置
 
 - **活跃 Change**: `nl-capability-runtime`
-- **当前阶段**: DEV（段 1；T01/T02 完成，下一任务 T03）
-- **当前 Task**: `T03`（capability_scan：白名单扫描 + symlink 标记 + 权限映射）
+- **当前阶段**: DEV（段 1；T01/T02/T03 完成，下一任务 T04）
+- **当前 Task**: `T04`（capability_selftest：三档分类）
 - **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
   - 有活跃 change → 先读 `@.specs/nl-capability-runtime/CHANGE.md`

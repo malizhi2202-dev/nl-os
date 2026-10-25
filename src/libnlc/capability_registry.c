@@ -329,7 +329,7 @@ int nl_cap_save_atomic(NlCapRegistry *r, const char *path)
         nl_json_add_string(o, "id", c->id);
         nl_json_add_string(o, "name", c->name);
         nl_json_add_string(o, "path", c->path ? c->path : "");
-        nl_json_add_int(o, "inode", (int)c->inode);
+        nl_json_add_float(o, "inode", (double)c->inode);
         nl_json_add_string(o, "kind",
                            c->kind == NL_CAP_KIND_SYMLINK ? "symlink" : "file");
         nl_json_add_string(o, "perm", perm_to_str(c->perm_level));
@@ -414,6 +414,12 @@ const NlCapability *nl_cap_find(const NlCapRegistry *r, const char *id)
 int nl_cap_count(const NlCapRegistry *r) { return r ? r->count : 0; }
 
 int nl_cap_skipped(const NlCapRegistry *r) { return r ? r->skipped : 0; }
+
+const NlCapability *nl_cap_at(const NlCapRegistry *r, int index)
+{
+    if (!r || index < 0 || index >= r->count) return NULL;
+    return &r->items[index];
+}
 
 const char *nl_cap_default_path(void)
 {
