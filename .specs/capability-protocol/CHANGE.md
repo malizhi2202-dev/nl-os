@@ -164,3 +164,26 @@ JSON Lines over Unix socket（默认 `/run/nl-os/broker.sock`）：
 4. 未标注 `effect` 一律按 `delete`；MCP 门面仅暴露 `perm ≤ L2`（安全）
 5. 必须有一条"模型自报 `effect=read` 绕过策略"的对抗用例（安全）
 6. HTTP 适配器仅 beta（`http://` only），TASK 按适配器拆分、各自独立 verify（PM）
+
+
+---
+
+## ✅ 用户方案确认（2026-10-25）
+
+用户逐条确认以下 10 条关键决策，作为本 change 的实施依据：
+
+| # | 决策 | 确认 |
+|---|---|---|
+| 1 | 协议 = 5 条报文，JSON Lines over Unix socket | ✅ |
+| 2 | 两阶段 invoke（只裁决）/ commit（凭 ticket 执行） | ✅ |
+| 3 | `plan` 为 argv 数组，不经 shell（不支持管道/重定向） | ✅ |
+| 4 | `effect` 五类，未标注一律按 `delete` | ✅ |
+| 5 | 威胁模型：模型/agent 不可信，系统用户可信 | ✅ |
+| 6 | 四执行面 v1 全做；dbus/http 子进程桥；`http:` 仅 http:// | ✅ |
+| 7 | MCP 双向（反向吸收 + 门面仅 `perm ≤ L2`） | ✅ |
+| 8 | ticket 一次性 + TTL 60s + args 哈希 + 表上限 1024/LRU | ✅ |
+| 9 | broker 独立进程 + fail-closed | ✅ |
+| 10 | 不做策略语言（YAML/Rego），编译期表 + 运行期规则 | ✅ |
+
+**另**：用户裁定不新建 `ARCHITECTURE.md`，**以 ADR-001~018 作为事实上的架构文档**（覆盖模块边界、协议、威胁模型）。
+需要时再跑 `A-architect` 汇总。此裁定同步写入 `CONTEXT.md` 与 `STATE.md`。

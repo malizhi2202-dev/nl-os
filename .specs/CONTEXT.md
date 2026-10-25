@@ -92,6 +92,7 @@ NL-OS 是一个**自然语言驱动的操作系统交互层**。目标是把「�
 - `[2026-10-25]` **CIP v1 定案**：五报文 / 两阶段 invoke-commit / `plan` 用 argv 数组不经 shell / `effect` 五类且缺省 delete / 威胁模型"模型不可信、系统用户可信"。`@.specs/adr/016-cip-protocol.md`
 - `[2026-10-25]` **broker 为独立进程 + fail-closed**；ticket 一次性、TTL 60s、绑定 args_hash、表上限 1024 + LRU。`@.specs/adr/017-broker-process.md`
 - `[2026-10-25]` **执行面用子进程桥**：不引 libdbus / libcurl / TLS；`http:` 仅 http://，https 走 `cli:curl`。`@.specs/adr/018-capability-adapters.md`
+- `[2026-10-25]` **以 ADR 作为架构文档**：不单独维护 `ARCHITECTURE.md`，模块边界与协议契约由 ADR-001~018 承载；需要全景时再跑 `A-architect` 汇总。用户裁定。
 - `[2026-10-25]` **不做策略语言**（YAML/Rego/Cedar），策略用编译期表 + 运行期规则——解释器在端侧是纯负担。
 - `[2026-10-25]` **能力注册表格式 v1 冻结**：JSON Lines + `format_version` + `flock` + `rename` 原子写 + 权限 0600。`@.specs/adr/012-capability-registry.md`
 - `[2026-07-01]` **ADR-004** 模型选型流程：先建 benchmark（1000 条中文 NL→命令测试集）→ 跑分对比 → 数据驱动选型。对比维度：准确率/延迟/内存。来自 `@.specs/nl-os/CHANGE.md`
