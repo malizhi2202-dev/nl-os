@@ -93,6 +93,15 @@ add_executable(nl-perm
 target_link_libraries(nl-perm PRIVATE nlc)
 
 # ============================================================
+# nlbroker 能力调用 broker（CIP v1 · capability-protocol）
+# ============================================================
+add_executable(nlbroker
+    src/nlbroker/main.c
+    src/nlbroker/server.c
+)
+target_link_libraries(nlbroker PRIVATE nlc)
+
+# ============================================================
 # nlsh NL-Shell REPL
 # ============================================================
 add_executable(nlsh

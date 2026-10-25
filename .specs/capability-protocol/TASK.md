@@ -52,7 +52,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on></depends_on>
 </task>
 
-<task id="T02" parallel="false" status="pending" auto="true">
+<task id="T02" parallel="false" status="done" auto="true">
   <name>broker 骨架：Unix socket + 行分帧 + 分发</name>
   <read_files>
     src/libnlc/cip.h

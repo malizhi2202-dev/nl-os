@@ -1,0 +1,25 @@
+[Unit]
+Description=NL-OS capability broker (CIP v1)
+Documentation=file:/usr/share/doc/nl-os/README.md
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nlbroker --socket /run/nl-os/broker.sock
+Restart=on-failure
+RestartSec=2
+
+# 运行目录由 systemd 创建；socket 权限由 broker 自己设为 0600
+RuntimeDirectory=nl-os
+RuntimeDirectoryMode=0755
+
+# 最小权限：broker 只读注册表、写审计与快照
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+StateDirectory=nl-os
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target
