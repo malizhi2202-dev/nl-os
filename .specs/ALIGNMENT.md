@@ -1,8 +1,9 @@
 # ALIGNMENT — 五层对齐报告
 
-- **本轮基线**: `75e911e`（capability-protocol 起点）
-- **对齐到**: `e410142`
-- **五层状态**: L1 ✔ / L2 N/A（无 UI）/ L3 ✔（已合并）/ L4 ✔（已补验证状态）/ L5 ✔
+- **本轮基线**: `e410142`（上轮对齐终点）→ 本轮覆盖 `e410142..f1bd0f2`
+- **当前对齐到**: `f1bd0f2`（change `nlsh-exec`）
+- **五层状态（当前）**: L1 ✔ / L2 N/A（无 UI）/ L3 ✔ / L4 ✔ / L5 ✔
+- **上轮基线**: `75e911e` → `e410142`（capability-protocol）
 
 ## 1. 覆盖提交（20 条，`75e911e..e410142`）
 
@@ -59,4 +60,16 @@
 
 ## 附录 · 历史轮次
 
-（无，本轮为首次对齐）
+### 2026-10-25 · nlsh-exec 轮（`e410142..f1bd0f2`）
+
+| # | 规则 | 漂移 | 处置 |
+|---|---|---|---|
+| N1-1 | 代码变了、活文档没变 | `README.md` 只有一个"组件表"，未说明 nlsh **会执行**、`NL_ASSUME_YES`、`--dry-run` | ✔ 已补「用自然语言干活」小节 |
+| N1-2 | 同上 | `nl-capability-runtime/UAT.md` 的场景 2/3/4/6 描述的是"只展示不执行"，已被本 change 改变 | ✔ 已重写场景 2，修正 3/4 预期，补 `rule-decisive` 方法名 |
+| N3-1 | 设计与实现不符 | 旧 `DESIGN.md` §2 管线图画到"展示命令"为止，实际已贯通执行 | ✔ 已在旧 DESIGN 顶部加"后续变更"指引，实现细节落在 `nlsh-exec/DESIGN.md` |
+| N5-1 | 需求失配 | UAT S4 期望"拒绝"，实现曾生成 `rm -rf 原文件` | ✔ 预算层修复 + 回归（`budget_test`） |
+| N6-1 | 孤儿产物 | 新脚本 `scripts/verify_exec.sh` 是否被引用 | ✔ 已写入 `nlsh-exec/TEST.md`、`STATE.md`、`CHANGELOG.md` |
+| N2-1 | 决策与代码矛盾 | `--decide` 把"规则已确定、没解码"标成 `choice-llm` | ✔ 改 `rule-decisive`；旧 change 的 T11b/T13 SUMMARY 是历史记录，不改写，差异在此登记 |
+
+**拉齐动作**：README / 旧 UAT / 旧 DESIGN / STATE / CHANGELOG / LESSONS 均已更新，无待人工裁决项。
+**对齐到**：`f1bd0f2`。

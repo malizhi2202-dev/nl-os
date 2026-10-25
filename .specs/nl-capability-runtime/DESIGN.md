@@ -3,6 +3,7 @@
 - **Change ID**: `nl-capability-runtime`
 - **关联**: `@.specs/nl-capability-runtime/CHANGE.md`、`@.specs/nl-capability-runtime/REQUIREMENT.md`、`@.specs/CONTEXT.md`
 - **作者**: AI（Architect 角色）+ 四角色专家团三轮讨论
+- **后续变更**: 「确认→权限→快照→执行→审计」的实际接线由 change `nlsh-exec` 完成（本文 §2 的管线图当时只画到"展示命令"），见 `@.specs/nlsh-exec/DESIGN.md`
 
 ---
 
