@@ -91,33 +91,36 @@
 ```json
 {"v":1,"id":"<客户端自增>","op":"discover|describe|invoke|commit|audit"}
 ```
-响应：`{"v":1,"id":"...","ok":true|false,"error":"<code>?"...}`
+响应：`{"v":1,"id":"...","ok":true|false,"error":"<code>?","result":<payload>?}`
+
+> **字段约定（T01 实现时澄清）**：信封 `id` 是**客户端请求 id**；能力 ID 用独立字段 `capability`。
+> 早期草案把两者都写成 `id`，会产生歧义，已更正。
 
 版本协商：`v` 不匹配 → `E_VERSION`；broker 支持 `v=1` 的最小兼容集。
 
 ### 3.2 五条报文
 
 ```json
-{"op":"discover","prefix":"dbus:","limit":100,"cursor":null}
+{"op":"discover","id":"r0","prefix":"dbus:","limit":100,"cursor":null}
 → {"ok":true,"tier":"A","capabilities":[
      {"id":"cli:ls","name":"ls","perm":"L1","effect":"read","reversible":true}],
    "cursor":"<opaque>"}
 
-{"op":"describe","ids":["cli:rm"]}
+{"op":"describe","id":"r1","ids":["cli:rm"]}
 → {"ok":true,"capabilities":[{"id":"cli:rm","slots":[{"name":"paths","type":"path[]"}],
      "effect":"delete","reversible":false,"timeout_ms":5000,"cost":"fast",
      "effect_defaulted":true}]}
 
-{"op":"invoke","id":"cli:mkdir","args":{"paths":["/tmp/x"]},"dry_run":false}
+{"op":"invoke","id":"r2","capability":"cli:mkdir","args":{"paths":["/tmp/x"]},"dry_run":false}
 → {"ok":true,"verdict":"confirm","reason":"L2 write","plan":{"argv":["mkdir","-p","/tmp/x"]},
    "ticket":"<128bit>","ttl_ms":60000}
 → {"ok":true,"verdict":"deny","reason":"protected path /etc","plan":null,
    "alternatives":["cli:ls"]}
 
-{"op":"commit","ticket":"<...>"}
+{"op":"commit","id":"r3","ticket":"<...>"}
 → {"ok":true,"status":"ok","exit":0,"output":"","snapshot_ref":null,"audit_id":"a-..."}
 
-{"op":"audit","since":1699999999,"limit":50}
+{"op":"audit","id":"r4","since":1699999999,"limit":50}
 → {"ok":true,"records":[{"audit_id":"a-..","ts":..,"capability_id":"cli:mkdir",
     "verdict":"confirm","effect":"write","duration_us":812,"reason":"L2 write"}]}
 ```

@@ -71,6 +71,7 @@ add_library(nlc SHARED
     src/libnlc/capability_scan.c
     src/libnlc/budget.c
     src/libnlc/audit.c
+    src/libnlc/cip.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)
 target_link_libraries(nlc PUBLIC cjson Threads::Threads)

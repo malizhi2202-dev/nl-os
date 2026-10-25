@@ -31,7 +31,7 @@
 
 ### AC-3 · invoke 只裁决，不执行
 
-- **Given** 一个危险请求 `{"op":"invoke","id":"cli:rm","args":{"paths":["/etc"]}}`
+- **Given** 一个危险请求 `{"op":"invoke","id":"r1","capability":"cli:rm","args":{"paths":["/etc"]}}`
 - **When** broker 收到该请求
 - **Then** 返回 `verdict:"deny"`、`reason` 命中规则、**响应中不出现可执行的 `plan`**；且用 `strace -f -e trace=execve` 观察 broker，**无任何 `execve` 发生**
 - **验证方式**: `strace -f -e trace=execve -p $(pidof nlbroker) &` + 发送请求，断言无 execve 且 verdict=deny

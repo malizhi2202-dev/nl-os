@@ -131,3 +131,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/audit_test.c)
     target_link_libraries(test_audit PRIVATE nlc cjson)
     add_test(NAME audit COMMAND test_audit)
 endif()
+
+# CIP 协议编解码（T01 · capability-protocol）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/cip_test.c)
+    add_executable(test_cip unit/cip_test.c)
+    target_include_directories(test_cip PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_cip PRIVATE nlc cjson)
+    add_test(NAME cip COMMAND test_cip)
+endif()
