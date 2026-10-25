@@ -100,6 +100,61 @@ reset_log
 HOME="$H2" bash -ic '查询磁盘占用情况' >/dev/null 2>&1
 chk "AC-9 交互式终端里中文未知命令被接管" "[ $(calls) -eq 1 ]"
 
+echo "=== AC-10 shell 内建 cd：handler 只写指令，PROMPT_COMMAND 在父 shell 应用"
+# 假 nlsh 改成：收到 -c 时把 __NL_CD__ /tmp 写进指令通道
+cat > "$FAKEBIN/nlsh" <<EOF
+#!/usr/bin/env bash
+printf '%s|' "\$@" >> "$LOG"
+echo >> "$LOG"
+[ -n "\${NL_SHELL_DIRECTIVE:-}" ] && printf '__NL_CD__ /tmp\\n' > "\$NL_SHELL_DIRECTIVE"
+exit 0
+EOF
+chmod +x "$FAKEBIN/nlsh"
+out=$(cd / && printf '进入 /tmp 目录\npwd\nexit\n' | PATH="$FAKEBIN:$PATH" bash -i 2>&1)
+chk "AC-10a 父 shell 真的 cd 到 /tmp" "printf '%s' \"\$out\" | grep -q '^/tmp$'"
+chk "AC-10b handler 内 cd 不算数（子 shell），由 PROMPT_COMMAND 补上" "printf '%s' \"\$out\" | grep -q 'nl-os-.*\.directive\|/tmp'"
+
+echo "=== AC-11 PROMPT_COMMAND 不被覆盖 / 不重复挂载"
+out=$(printf 'exit\n' | PATH="$FAKEBIN:$PATH" bash -i -c 'true' 2>/dev/null; true)
+h3="$T/home3"; mkdir -p "$h3"
+{ echo 'PROMPT_COMMAND="echo USER_PROMPT_CMD"'; } > "$h3/.bashrc"
+HOME="$h3" bash "$ROOT/scripts/install_local.sh" --hook-only >/dev/null 2>&1
+chk "AC-11a 原有 PROMPT_COMMAND 仍在" "grep -q 'USER_PROMPT_CMD' '$h3/.bashrc'"
+out=$(cd / && printf 'exit\n' | HOME="$h3" PATH="$FAKEBIN:$PATH" bash -i 2>&1)
+chk "AC-11b 用户原有 PROMPT_COMMAND 仍被执行" "printf '%s' \"\$out\" | grep -q USER_PROMPT_CMD"
+n=$(printf 'source %s/share/nl-os/nl-hook.bash; source %s/share/nl-os/nl-hook.bash; printf "%%s" "$PROMPT_COMMAND"' \
+      "$h3/.local" "$h3/.local" | bash 2>/dev/null | grep -o _nl_hook_apply_directive | wc -l | tr -d ' ')
+chk "AC-11c 重复 source 不会重复挂载（1 次）" "[ '$n' -eq 1 ]"
+
+echo "=== AC-12 内建命令仍不 eval（指令通道里塞命令不会被执行）"
+SENT2="$T/PWNED2"; rm -f "$SENT2"
+cat > "$FAKEBIN/nlsh" <<EOF
+#!/usr/bin/env bash
+[ -n "\${NL_SHELL_DIRECTIVE:-}" ] && printf '__NL_CD__ /tmp; touch $SENT2\\n' > "\$NL_SHELL_DIRECTIVE"
+exit 0
+EOF
+chmod +x "$FAKEBIN/nlsh"
+(cd / && printf '进入某个地方\nexit\n' | PATH="$FAKEBIN:$PATH" bash -i >/dev/null 2>&1)
+chk "AC-12 注入内容一字节未执行" "[ ! -f '$SENT2' ]"
+
+echo "=== AC-13 nlsh 侧指令通道（真二进制）"
+NLSH="$ROOT/build/nlsh"
+if [ -x "$NLSH" ]; then
+    rm -f "$T/d1"
+    out=$("$NLSH" --no-model -c '进入 /tmp 目录' <<<'') ; rc=$?
+    chk "AC-13a 无指令通道时诚实报错（不假装成功）" "[ $rc -ne 0 ] && printf '%s' \"\$out\" | grep -q '需要在终端钩子下运行'"
+    rm -f "$T/d1"
+    NL_SHELL_DIRECTIVE="$T/d1" "$NLSH" --no-model -c '进入 /tmp 目录' >/dev/null 2>&1; rc=$?
+    chk "AC-13b 有通道时写 __NL_CD__ 并 rc=0" "[ $rc -eq 0 ] && grep -qxF '__NL_CD__ /tmp' '$T/d1'"
+    rm -f "$T/d2"
+    NL_SHELL_DIRECTIVE="$T/d2" "$NLSH" --no-model -c '进入 /no_such_dir_zzz 目录' >/dev/null 2>&1; rc=$?
+    chk "AC-13c 目标不是目录 → 拒绝且不写指令" "[ $rc -ne 0 ] && [ ! -s '$T/d2' ]"
+    out=$("$NLSH" --no-model --dry-run -c '切换到上级目录' 2>&1)
+    chk "AC-13d cd .. 模板可达（死模板已修）" "printf '%s' \"\$out\" | grep -qF '[dry-run] cd ..'"
+else
+    echo "SKIP AC-13（未构建 build/nlsh）"
+fi
+
 echo
 echo "=== 合计：$pass 通过 / $fail 失败"
 [ "$fail" -eq 0 ] || exit 1

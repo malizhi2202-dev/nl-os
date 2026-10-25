@@ -6,12 +6,13 @@
 
 ## 当前位置
 
-- **活跃 Change**: `shell-nl-hook`（**已完成**：终端里直接说人话，25 断言全绿；`nlsh-exec` 等 UAT 签核）
+- **活跃 Change**: `nl-shell-runtime`（**已完成**：`cd` 生效 + 常驻解析进程 + 修模型路径 abort；ctest 33/33、hook 35/35、exec 81/81）
 - **当前阶段**: `nlsh-exec` 已过 7-integration（验收 **81/81**、`ctest` 31/31、四角色通过；确认策略经专家团统一为 ADR-019 并做了全矩阵落地测试），**等用户签核 UAT**
 - **已可安装使用**: `bash scripts/install_local.sh` → `~/.local/bin/nlsh`（模型自动发现，无需 export）
 - **已安装版本**: 23:01 装的含惰性加载的 Release（`列出当前目录下的文件` = 0.04s / 7.6MB；规则未命中仍 1.9s / 677MB，属设计内）。**改完源码必须重跑 `install_local.sh`**，否则用户路径还是旧二进制
 - **终端钩子已装**: `~/.bashrc` 标记块 → `~/.local/share/nl-os/nl-hook.bash`（卸载 `install_local.sh --uninstall-hook`）
-- **当前 Task**: 无未完成项；`nl-capability-runtime/UAT.md` 的 12 个场景已由 AI 实跑 12/12（场景 3/4 由本 change 修复）
+- **当前 Task**: 无未完成项；**已知瓶颈**：规则未命中的单次推理约 20s（模型层，非 IPC）
+- **当前 Task 补充**: `nl-capability-runtime/UAT.md` 的 12 个场景已由 AI 实跑 12/12（场景 3/4 由本 change 修复）
 - **模型已就位**: `~/.local/share/nl-os/qwen2.5-0.5b-q4_0.gguf`（428MB，Qwen2.5-0.5B-Instruct q4_0）
 - **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
@@ -34,8 +35,8 @@
 |---|---|---|---|---|
 | 注册表格式冻结 | 决策 | DESIGN 必须先冻结 `format_version` + schema，否则不得拆段 2 任务（架构师条件） | 设计 | 2026-10-25 |
 | ~~ARCHITECTURE.md 缺失~~ | 决策 | ✅ 已裁定：以 ADR-001~018 作为架构文档，不单独维护 | 用户 | 2026-10-25 |
-| shell 内建（`cd`/`export`）| 决策 | 钩子在子进程执行，改不了父 shell cwd；`cli:cd` 未注册，`进入 xx 目录` 现报"无该能力"。要做需先定"内建能力由钩子在父 shell eval"的安全模型（确认门/审计怎么算） | 用户 | 2026-10-25 |
-| 模型常驻进程 | 决策 | 模型放 `nlsh` 进程内 还是独立 `nl-infer` 守护进程？**现状：进程内**（`nlsh --decide` 每次冷启动约 4s 读 428MB）。是否需要常驻仍待定，取决于目标硬件的 SD 卡读速 | 用户 | 2026-10-25 |
+| ~~shell 内建（`cd`）~~ | 决策 | ✅ 已落地（ADR-020）：指令通道 + `PROMPT_COMMAND`，不 eval；`export`/`alias` 仍未做 | 用户 | 2026-10-25 |
+| ~~模型常驻进程~~ | 决策 | ✅ 已落地（ADR-021）：`nlsh --serve` + 三级回退。**但单次推理仍约 20s**（128 token 生成 × 最多 3 次重试），规则未命中的句子交互上仍不可用——这是下一个要解决的问题 | 用户 | 2026-10-25 |
 | 中文 benchmark 规模不足 | 决策 | 现 `models/benchmarks/nl-commands-zh.json` 仅 33 条，计划 1000 条 | 用户 | 2026-10-25 |
 | ~~模型未部署~~ | bug | ✅ 已部署到 `~/.local/share/nl-os/`（`NL_MODEL_PATH` 指定）；`download_model.sh` 默认写 `/usr/share/nl-os` 会权限失败且**仍退出 0**（已知缺陷） | 用户 | 2026-10-25 |
 | ~~自然语言命令不执行~~ | bug | ✅ 已修（change `nlsh-exec`）：`nlsh` 内贯通 确认→权限→快照→执行→审计，执行器与 `nl-run` 共用 | 用户 | 2026-10-25 |
@@ -49,6 +50,9 @@
 
 ## 决策日志（最近 10 条，倒序）
 
+- `[2026-10-25]` **常驻解析进程 `nlsh --serve`**：模型只加载一次、空闲卸载；只在 TTY 自动拉起；三级回退（规则→常驻→进程内）——`@.specs/adr/021-inferd-daemon.md`。实测省 1.8s/次的加载，但推理 20s 仍是瓶颈
+- `[2026-10-25]` **`cd` 由父 shell 执行**：`bash` 的 `command_not_found_handle` 在子 shell 里跑，钩子 cd 无效 → `nlsh` 写 `__NL_CD__ <dir>`，`PROMPT_COMMAND` 执行 `cd -- "$dir"`（不 eval）——`@.specs/adr/020-shell-builtin-parent-exec.md`
+- `[2026-10-25]` **修模型路径 abort**：decode 分块按 `n_ctx`(512) 而断言要求 `n_batch`(256)，prompt 超 256 token 就 `GGML_ASSERT` 崩（每次调用 `rc=134`）；AC-14 只断言了"加载"没断言"成功"，所以一直没发现
 - `[2026-10-25]` **终端直接说人话（shell 钩子）**：bash `command_not_found_handle`，只接管含中文的未知命令，英文与真命令零影响；钩子不 eval、原样交 `nlsh -c`（确认门/审计不变）——`@.specs/shell-nl-hook/`
 - `[2026-10-25]` **模型惰性加载**：规则能决定的命令不再启动即加载 428MB 模型（3.57s/779MB → 0.2s/19MB）；规则未命中仍加载（AC-14 5 条）——回应"占用 CPU 很大很快就满了"
 - `[2026-10-25]` **统一确认门完成落地测试**：40 条断言（词表全量/空行与 EOF 取消/只读不问/绕过等价/退出码 0-1-3/快路径快照与审计）；测试撞出并修掉"`--freeze` 丢 `# @perm:` 头"

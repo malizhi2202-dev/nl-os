@@ -10,6 +10,8 @@
 #include "decision.h"
 #include "decision_model.h"
 #include "nl_eval.h"
+#include "serve.h"
+#include "parse_ipc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +25,8 @@ static void print_usage(void) {
     printf("           [--scan] [--self-test] [--audit] [--undo [N]] [-c cmd]\n");
     printf("           [--decide 自然语言]   只做决策（候选收缩 + 受约束 Choice），不执行\n");
     printf("           [--eval FILE]         跑中文评测集，输出逐条决策 + 汇总\n");
+    printf("           [--serve] [--socket P] [--idle N] [--max-idle N]\n");
+    printf("                                 常驻解析守护进程（模型只加载一次，空闲卸载）\n");
     printf("环境变量: NL_MODEL_PATH / NL_TIER(1-4，覆盖档位探测)\n");
 }
 /* 档位探测：NL_TIER 可覆盖（容器/cgroup 会误判，ADR-015 要求允许人工覆盖） */
@@ -141,6 +145,8 @@ int main(int argc, char **argv) {
     char *cmd=NULL;
     const char *decide_input=NULL;
     const char *eval_path=NULL;
+    int do_serve=0, serve_idle=300, serve_max_idle=3600;
+    const char *serve_socket=NULL;
     for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--yes")==0)setenv("NL_ASSUME_YES","1",1); else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
         else if(strcmp(argv[i],"--registry")==0&&i+1<argc)registry_path=argv[++i];
         else if(strcmp(argv[i],"--scan")==0)do_scan=1;
@@ -153,7 +159,24 @@ int main(int argc, char **argv) {
         else if(strcmp(argv[i],"--since")==0&&i+1<argc)audit_since=atol(argv[++i]);
         else if(strcmp(argv[i],"--limit")==0&&i+1<argc)audit_limit=atoi(argv[++i]);
         else if(strcmp(argv[i],"--decide")==0&&i+1<argc)decide_input=argv[++i];
-        else if(strcmp(argv[i],"--eval")==0&&i+1<argc)eval_path=argv[++i]; else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
+        else if(strcmp(argv[i],"--eval")==0&&i+1<argc)eval_path=argv[++i];
+        else if(strcmp(argv[i],"--serve")==0)do_serve=1;
+        else if(strcmp(argv[i],"--socket")==0&&i+1<argc)serve_socket=argv[++i];
+        else if(strcmp(argv[i],"--idle")==0&&i+1<argc)serve_idle=atoi(argv[++i]);
+        else if(strcmp(argv[i],"--max-idle")==0&&i+1<argc)serve_max_idle=atoi(argv[++i]); else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
+    if (do_serve) {
+        char sp[512];
+        const char *path = serve_socket;
+        if (!path) {
+            if (nl_inferd_socket_path(sp, sizeof(sp)) != 0) {
+                fprintf(stderr, "nlsh: socket 路径过长\n");
+                return 1;
+            }
+            path = sp;
+        }
+        return nl_serve_run(path, serve_idle, serve_max_idle) == 0 ? 0 : 1;
+    }
+
     signal(SIGINT,sigint_handler);
     nl_history_init(getenv("HOME")?strcat(strcpy(malloc(256),getenv("HOME")),"/.nlsh_history"):NULL);
 
@@ -213,6 +236,8 @@ int main(int argc, char **argv) {
     if (eval_path) return nl_eval_run(reg_path, eval_path);
     if (decide_input) return run_decide(reg_path, decide_input, no_model);
 
+    /* --no-model：既不加载模型，也不去问常驻进程（否则等于偷偷用了模型） */
+    nl_dispatch_set_remote(!no_model);
     if(!no_model) {
         int tier = nl_resolve_tier();
         NlBackend be = nl_backend_for_tier(tier);

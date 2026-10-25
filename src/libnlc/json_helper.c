@@ -127,6 +127,29 @@ void nl_json_add_item(cJSON *obj, const char *key, cJSON *item)
     if (obj && key && item) cJSON_AddItemToObject(obj, key, item);
 }
 
+void nl_json_array_push_string(cJSON *arr, const char *value)
+{
+    if (arr && value) cJSON_AddItemToArray(arr, cJSON_CreateString(value));
+}
+
+void nl_json_array_push_item(cJSON *arr, cJSON *item)
+{
+    if (arr && item) cJSON_AddItemToArray(arr, item);
+}
+
+cJSON *nl_json_get_item(const cJSON *obj, const char *key)
+{
+    if (!obj || !key) return NULL;
+    return cJSON_GetObjectItem(obj, key);
+}
+
+const char *nl_json_string_value(const cJSON *item)
+{
+    return (item && item->valuestring) ? item->valuestring : NULL;
+}
+
+void nl_json_free_obj(cJSON *obj) { if (obj) cJSON_Delete(obj); }
+
 char *nl_json_print(const cJSON *obj)
 {
     if (!obj) return NULL;

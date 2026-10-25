@@ -7,6 +7,8 @@
 #include "budget.h"
 #include "snapshot.h"
 #include "capability_registry.h"
+#include "shell_builtin.h"
+#include "parse_ipc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +32,26 @@ int nl_is_traditional_cmd(const char *input) {
 }
 
 static NlCapRegistry *g_reg;
+static int g_remote_ok = 1;
+
+void nl_dispatch_set_remote(int on) { g_remote_ok = on; }
+
+/*
+ * 三级解析：本地规则（免费）→ 常驻进程（模型只加载一次）→ 进程内加载（老行为）。
+ * 任何一级失败都不让命令失败，只是退到下一级。
+ */
+static int parse_smart(const char *input, NlParseResult *r)
+{
+    int rr = nl_parse_rules_only(input, r);
+    if (rr == 1) return 0;
+    if (rr < 0) return -1;
+    if (g_remote_ok) {
+        memset(r, 0, sizeof(*r));
+        if (nl_parse_remote(input, r, NULL, 0) == 0 && r->command) return 0;
+        nl_parse_result_free(r);
+    }
+    return nl_parse(input, r);
+}
 
 void nl_dispatch_set_registry(NlCapRegistry *r) { g_reg = r; }
 NlCapRegistry *nl_dispatch_registry(void) { return g_reg; }
@@ -258,7 +280,7 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
     }
 
     NlParseResult r;
-    if (nl_parse(input, &r) != 0 || !r.command) {
+    if (parse_smart(input, &r) != 0 || !r.command) {
         /* 解析失败也要说清原因：能猜的给候选，猜不到的直说 */
         char cands[3][NL_CAP_MAX_ID_LEN];
         int n = suggest_from_keywords(input, cands);
@@ -280,8 +302,10 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
     /* ── 能力存在性：解析出能力但本机没有 → 明确拒绝并给候选 ── */
     char argv0[64], cap_id[NL_CAP_MAX_ID_LEN];
     command_argv0(r.command, argv0, sizeof(argv0));
-    snprintf(cap_id, sizeof(cap_id), "cli:%s", argv0);
-    if (g_reg && nl_cap_find(g_reg, cap_id) == NULL) {
+    /* shell 内建（cd）不是 PATH 里的二进制，永远"本机有"（ADR-020） */
+    int builtin = nl_shell_builtin_is(argv0);
+    snprintf(cap_id, sizeof(cap_id), "%s:%s", builtin ? "shell" : "cli", argv0);
+    if (!builtin && g_reg && nl_cap_find(g_reg, cap_id) == NULL) {
         char cands[3][NL_CAP_MAX_ID_LEN];
         int n = suggest_candidates(argv0, cands);
         size_t used = (size_t)snprintf(output, out_sz,
@@ -349,6 +373,26 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
                 r.perm_level >= 3)
                 fprintf(stderr, "⚠️ 未留快照（超限或含敏感路径）\n");
         }
+    }
+
+    /* ── shell 内建：本进程不 fork，交给父 shell（钩子执行 cd）── */
+    if (builtin) {
+        char err[512];
+        printf("→ %s\n", r.command);
+        fflush(stdout);
+        if (nl_shell_builtin_emit(r.command, err, sizeof(err)) == 0) {
+            printf("✅ 已切换目录\n");
+            snprintf(output, out_sz, "→ %s\n✅ 已切换目录", r.command);
+            audit_emit(input, cap_id, "allow", "ok", "shell-directive", 0, 0);
+            nl_parse_result_free(&r);
+            return 0;
+        }
+        /* 没有指令通道（普通 nlsh -c）或目标不是目录：说清原因，绝不假装成功 */
+        printf("⚠️ %s\n", err);
+        snprintf(output, out_sz, "→ %s\n⚠️ %s", r.command, err);
+        audit_emit(input, cap_id, "refused", "refused", "builtin-no-parent-shell", 0, 0);
+        nl_parse_result_free(&r);
+        return -1;
     }
 
     /* ── 执行（不经 shell；子进程继承 stdout，fork 前必须 flush） ── */

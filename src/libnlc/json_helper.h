@@ -53,6 +53,19 @@ void nl_json_add_float(cJSON *obj, const char *key, double value);
 void nl_json_add_bool(cJSON *obj, const char *key, int value);
 void nl_json_add_item(cJSON *obj, const char *key, cJSON *item);
 
+/* 数组追加（构造请求/响应里的列表） */
+void nl_json_array_push_string(cJSON *arr, const char *value);
+void nl_json_array_push_item(cJSON *arr, cJSON *item);
+
+/* 取子对象/子数组；返回内部指针，随文档一起释放 */
+cJSON *nl_json_get_item(const cJSON *obj, const char *key);
+
+/* 数组元素若是字符串，返回其内容（否则 NULL） */
+const char *nl_json_string_value(const cJSON *item);
+
+/* 释放一个自己构造的 cJSON 对象（nl_json_print 不会替你释放） */
+void nl_json_free_obj(cJSON *obj);
+
 /*
  * 序列化 JSON → 字符串
  * 返回 malloc 的字符串，调用者负责 free

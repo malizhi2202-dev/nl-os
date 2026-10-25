@@ -290,6 +290,21 @@ static const NlRule RULES[] = {
      {"cd", NULL},
      {{"location", "word", NULL}, {NULL}},
      "cd /tmp"},
+    /* 上级目录：模板 901 = `cd ..`。此前该模板没有任何规则能选到（死模板），
+     * 导致 `切换到上级目录` 被 83 号规则吃掉、生成 `cd 上级目录`。
+     * 必须在 83/84/85 之前 —— 匹配是"第一个命中的规则胜"。 */
+    {87, NL_INTENT_CHANGE_DIR, 901,
+     {"上级", NULL},
+     {{NULL}},
+     "切换到上级目录"},
+    {88, NL_INTENT_CHANGE_DIR, 901,
+     {"父目录", NULL},
+     {{NULL}},
+     "回到父目录"},
+    {89, NL_INTENT_CHANGE_DIR, 901,
+     {"上一级", NULL},
+     {{NULL}},
+     "返回上一级"},
     {83, NL_INTENT_CHANGE_DIR, 9,
      {"切换", "目录", NULL},
      {{"location", "after_key", "到"}, {NULL}},

@@ -209,6 +209,54 @@ int nl_parse(const char *input, NlParseResult *result) {
     return 0;
 }
 
+/* 只跑规则层：与 nl_parse 前两层的逻辑保持一致（unit test 断言两者判定一致） */
+int nl_parse_rules_only(const char *input, NlParseResult *result) {
+    if (!input || !result) return -1;
+    memset(result, 0, sizeof(NlParseResult));
+
+    NlSanitizeResult sr = nl_input_sanitize(input);
+    const char *clean_input = sr.cleaned_input ? sr.cleaned_input : input;
+
+    NlRuleResult rule_r;
+    int hit = (nl_rule_match(clean_input, &rule_r) == 0);
+    int rc = 0;
+    if (hit) {
+        NlCommand cmd;
+        if (nl_template_fill(rule_r.intent, rule_r.template_id,
+                             rule_r.slots, rule_r.slot_count, &cmd) == 0) {
+            result->intent = rule_r.intent;
+            result->command = cmd.command;
+            result->perm_level = cmd.perm_level;
+            result->source = NL_SOURCE_RULE;
+            result->confidence = 1.0f;
+            result->needs_confirm = cmd.needs_confirm;
+            result->slot_count = rule_r.slot_count;
+            for (int i = 0; i < rule_r.slot_count && i < NL_MAX_SLOTS; i++) {
+                result->slots[i].name = rule_r.slots[i].name;
+                result->slots[i].value = rule_r.slots[i].value;
+                rule_r.slots[i].name = NULL;
+                rule_r.slots[i].value = NULL;
+            }
+            for (int i = 0; i < cmd.path_count && i < NL_MAX_PATHS; i++) {
+                result->normalized_paths[i] = cmd.paths[i];
+                cmd.paths[i] = NULL;
+                result->path_count++;
+            }
+            cmd.command = NULL;
+            nl_command_free(&cmd);
+            snprintf(result->debug_info, sizeof(result->debug_info),
+                     "[规则引擎] 命中 rule#%d intent=%s（无模型）",
+                     rule_r.rule_id, nl_intent_name(rule_r.intent));
+            rc = 1;
+        } else {
+            nl_command_free(&cmd);
+        }
+    }
+    nl_rule_result_free(&rule_r);
+    nl_sanitize_result_free(&sr);
+    return rc;
+}
+
 void nl_parse_result_free(NlParseResult *r) {
     if (!r) return;
     free(r->command);

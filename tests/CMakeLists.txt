@@ -284,3 +284,18 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/confirm_test.c)
     target_link_libraries(test_confirm PRIVATE nlc)
     add_test(NAME confirm COMMAND test_confirm)
 endif()
+
+# shell_builtin 测试（sql 内建 cd 的指令通道）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/shell_builtin_test.c)
+    add_executable(test_shell_builtin unit/shell_builtin_test.c)
+    target_include_directories(test_shell_builtin PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    add_test(NAME shell_builtin COMMAND test_shell_builtin)
+endif()
+
+# parse_ipc 测试（常驻解析进程编解码 + 规则判定一致）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/parse_ipc_test.c)
+    add_executable(test_parse_ipc unit/parse_ipc_test.c)
+    target_include_directories(test_parse_ipc PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_parse_ipc PRIVATE nlc)
+    add_test(NAME parse_ipc COMMAND test_parse_ipc)
+endif()

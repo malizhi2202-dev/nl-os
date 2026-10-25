@@ -147,13 +147,18 @@ static int infer_impl(NlModel *m, const char *prompt, const char *grammar,
     int n = llama_tokenize(m->vocab, prompt, (int)strlen(prompt), tokens, 1024, 1, 0);
     if (n < 0) return -1;
 
-    /* Decode prompt */
+    /* Decode prompt
+     * 分块上限是 **n_batch**（不是 n_ctx）：llama_decode 断言 n_tokens_all <= n_batch，
+     * 按 n_ctx（512）分块时一段 300 token 的 prompt 会直接 GGML_ASSERT 杀掉进程
+     * （实测 `显示当前工作目录` 的 few-shot prompt 就超过 256 而 abort）。 */
     uint32_t n_ctx = llama_n_ctx(m->llama_ctx);
+    uint32_t chunk = llama_n_batch(m->llama_ctx);
+    if (chunk == 0 || chunk > n_ctx) chunk = n_ctx;
     /* prompt 超出上下文窗口：直接失败，不要靠 decode 报错（会留下半截 KV） */
     if (n > (int)n_ctx) return -1;
-    for (int pos = 0; pos < n; pos += (int)n_ctx) {
-        int batch = (n - pos > (int)n_ctx) ? (int)n_ctx : (n - pos);
-        if (llama_decode(m->llama_ctx, llama_batch_get_one(tokens + pos, batch)) != 0)
+    for (int pos = 0; pos < n; pos += (int)chunk) {
+        int nb = (n - pos > (int)chunk) ? (int)chunk : (n - pos);
+        if (llama_decode(m->llama_ctx, llama_batch_get_one(tokens + pos, nb)) != 0)
             return -1;
     }
 

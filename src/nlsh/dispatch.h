@@ -3,6 +3,9 @@
 #define NL_DISPATCH_H
 
 #include "capability_registry.h"
+
+/* 规则未命中时是否允许走常驻解析进程（--no-model 时关掉） */
+void nl_dispatch_set_remote(int on);
 int nl_is_traditional_cmd(const char *input);
 /* dry_run: 1 = 只解析/预演，不执行、不落快照（--dry-run） */
 int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run);

@@ -83,6 +83,8 @@ add_library(nlc SHARED
     src/libnlc/freeze.c
     src/libnlc/snapshot.c
     src/libnlc/exec.c
+    src/libnlc/shell_builtin.c
+    src/libnlc/parse_ipc.c
     src/libnlc/confirm.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)
@@ -131,6 +133,7 @@ add_executable(nlsh
     src/nlsh/line_edit.c
     src/nlsh/ipc_client.c
     src/nlsh/nl_eval.c
+    src/nlsh/serve.c
 )
 target_link_libraries(nlsh PRIVATE nlc)
 

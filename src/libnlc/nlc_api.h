@@ -51,6 +51,14 @@ void nl_free(void);
 
 /* ── 核心解析（四层管线）── */
 int  nl_parse(const char *input, NlParseResult *result);
+/*
+ * 只跑"安全网关 + 规则引擎 + 模板填充"，**不碰模型**。
+ * 返回 1 = 规则层已决定（*result 已填好，调用方负责 free）；
+ *      0 = 规则未命中，需要模型层（*result 为空）；
+ *     -1 = 入参错误。
+ * 用途：判断"这次调用到底需不需要模型"，从而决定要不要问常驻进程（ADR-021）。
+ */
+int  nl_parse_rules_only(const char *input, NlParseResult *result);
 void nl_parse_result_free(NlParseResult *r);
 
 /* ── Agent 扩展点（MVP 单步退化）── */

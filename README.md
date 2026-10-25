@@ -67,8 +67,12 @@ bash scripts/install_local.sh          # 装程序 + 把钩子写进 ~/.bashrc �
 - 开关：`NL_SHELL_HOOK=0` 完全关闭；`NL_SHELL_HOOK_ALL=1` 连英文未知命令也接管（默认关）。
 - 卸载：`bash scripts/install_local.sh --uninstall-hook`（只摘标记块，其它行不动；
   首次安装前已备份 `~/.bashrc.bak.nl-os`）。
-- 已知边界：`cd` / `export` 这类 **shell 内建**改不了父 shell，`进入 xx 目录` 目前会提示
-  "本机没有该能力：cli:cd"（v2 议题）；规则未命中的句子仍是约 1.9s 冷启动。
+- **`cd` 也支持**（ADR-020）：`进入 /tmp 目录`、`切换到上级目录` 会真正改变当前目录。
+  原理：`bash` 把钩子放在**子 shell** 里跑，`cd` 影响不到你；所以 `nlsh` 只把目标写成
+  `__NL_CD__ <dir>` 指令，由 `PROMPT_COMMAND`（主 shell）执行 `cd -- "$dir"`。只传路径、不 eval。
+- 规则未命中的句子改用**常驻解析进程**（ADR-021）：`nlsh --serve` 常驻，模型只加载一次、
+  空闲 5 分钟自动卸载；只在你敲句子的终端里自动拉起（stdin 非 TTY 不拉）。
+  实测省掉每次 1.8s 的加载与 780MB 重复分配；**推理本身约 20s 仍是既有瓶颈**。
 - 验收：`bash scripts/verify_hook.sh`（25 条断言，用假 nlsh + 临时 HOME，不动你的 `~/.bashrc`）。
 
 
