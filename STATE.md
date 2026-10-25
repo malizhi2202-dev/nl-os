@@ -7,7 +7,7 @@
 ## 当前位置
 
 - **活跃 Change**: `nl-capability-runtime`
-- **当前阶段**: CHANGE（0-change 产出已写入，待用户确认后过 G1 门禁）
+- **当前阶段**: CHANGE（用户已确认"一次全做"；G1 门禁已跑，3/4 通过 → 进入 REQUIREMENT）
 - **当前 Task**: —
 - **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
@@ -18,8 +18,7 @@
 
 | 项 | 类型 | 详情 | 待谁 | 自 |
 |---|---|---|---|---|
-| Phase 2 决策层 | 范围 | Choice/Score/Noul 三原语 + 约束解码，未开 change | 用户 | 2026-10-25 |
-| Phase 3 固化/回滚 | 范围 | `.tools` 固化 + L2/L3 快照撤销，未开 change | 用户 | 2026-10-25 |
+| 段间顺序 | 决策 | 三段同属本 change，能力注册表格式必须先冻结才能开段 2（架构师反对意见的条件） | 用户 | 2026-10-25 |
 | ARCHITECTURE.md 缺失 | 决策 | 架构级变更无沉淀处；建议 Phase 1 结束后跑一次 `A-architect` | 用户 | 2026-10-25 |
 | 中文 benchmark 规模不足 | 决策 | 现 `models/benchmarks/nl-commands-zh.json` 仅 33 条，计划 1000 条 | 用户 | 2026-10-25 |
 | 模型未部署 | bug | 本机无 `/usr/share/nl-os/model.gguf`，`nlsh` 只能走规则层 | 用户 | 2026-10-25 |
