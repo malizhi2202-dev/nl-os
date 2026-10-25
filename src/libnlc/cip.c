@@ -217,12 +217,21 @@ int nl_cip_render(const NlCipResp *r, char *buf, size_t cap)
     if (!r || !buf || cap == 0) return -1;
     int n;
     const char *ok = r->ok ? "true" : "false";
-    if (r->payload_json[0] != '\0') {
+
+    /* 顺序很重要：失败响应必须先处理，否则带 payload 的失败会丢掉 error 字段 */
+    if (!r->ok) {
+        if (r->payload_json[0] != '\0') {
+            n = snprintf(buf, cap,
+                         "{\"v\":%d,\"id\":\"%s\",\"ok\":false,\"error\":\"%s\",\"result\":%s}\n",
+                         r->v ? r->v : NL_CIP_VERSION, r->id,
+                         nl_cip_error_str(r->error), r->payload_json);
+        } else {
+            n = snprintf(buf, cap, "{\"v\":%d,\"id\":\"%s\",\"ok\":false,\"error\":\"%s\"}\n",
+                         r->v ? r->v : NL_CIP_VERSION, r->id, nl_cip_error_str(r->error));
+        }
+    } else if (r->payload_json[0] != '\0') {
         n = snprintf(buf, cap, "{\"v\":%d,\"id\":\"%s\",\"ok\":%s,\"result\":%s}\n",
                      r->v ? r->v : NL_CIP_VERSION, r->id, ok, r->payload_json);
-    } else if (!r->ok) {
-        n = snprintf(buf, cap, "{\"v\":%d,\"id\":\"%s\",\"ok\":false,\"error\":\"%s\"}\n",
-                     r->v ? r->v : NL_CIP_VERSION, r->id, nl_cip_error_str(r->error));
     } else {
         n = snprintf(buf, cap, "{\"v\":%d,\"id\":\"%s\",\"ok\":true}\n",
                      r->v ? r->v : NL_CIP_VERSION, r->id);

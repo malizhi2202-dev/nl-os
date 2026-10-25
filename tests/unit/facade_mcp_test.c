@@ -15,6 +15,7 @@ static int tests_run = 0, tests_passed = 0, tests_failed = 0;
 #include "../../src/nlbroker/adapter_cli.c"
 #include "../../src/nlbroker/adapter_dbus.c"
 #include "../../src/nlbroker/adapter_mcp.c"
+#include "../../src/nlbroker/adapter_http.c"
 #include "../../src/nlbroker/verdict.c"
 #include "../../src/nlbroker/ticket.c"
 #include "../../src/nlbroker/dispatch.c"

@@ -194,7 +194,6 @@ static int parse_cap_line(const char *line, NlCapability *out)
     int rc = -1;
 
     if (nl_json_get_string(doc.root, "id", &id) != 0 || !id || !*id) goto done;
-    if (nl_json_get_string(doc.root, "path", &path) != 0 || !path || !*path) goto done;
     if (nl_json_get_string(doc.root, "perm", &perm) != 0) goto done;
     if (nl_json_get_string(doc.root, "source", &source) != 0) goto done;
     if (nl_json_get_bool(doc.root, "trusted", &trusted) != 0) goto done;
@@ -208,7 +207,22 @@ static int parse_cap_line(const char *line, NlCapability *out)
     else
         snprintf(out->name, sizeof(out->name), "%s", id);
 
-    out->path = strdup(path);
+    /* 命名空间先定：非 cli 的能力 path 可缺省（用命名空间占位） */
+    {
+        const char *ns0 = NULL;
+        if (nl_json_get_string(doc.root, "namespace", &ns0) == 0 && ns0 && *ns0)
+            snprintf(out->namespace, sizeof(out->namespace), "%.15s", ns0);
+        else
+            cap_infer_namespace(out->id, out->namespace, sizeof(out->namespace));
+
+        if (nl_json_get_string(doc.root, "path", &path) == 0 && path && *path)
+            out->path = strdup(path);
+        else if (strcmp(out->namespace, "cli") != 0)
+            out->path = strdup(out->namespace);
+        else
+            goto done;              /* cli 能力必须有真实路径 */
+    }
+
     out->source = strdup(source);
     if (!out->path || !out->source) { cap_clear(out); goto done; }
 
@@ -239,11 +253,6 @@ static int parse_cap_line(const char *line, NlCapability *out)
         if (nl_json_get_bool(doc.root, "reversible", &rev) == 0)
             out->reversible = rev ? 1 : 0;
 
-        const char *ns = NULL;
-        if (nl_json_get_string(doc.root, "namespace", &ns) == 0 && ns && *ns)
-            snprintf(out->namespace, sizeof(out->namespace), "%.15s", ns);
-        else
-            cap_infer_namespace(out->id, out->namespace, sizeof(out->namespace));
     }
 
     cJSON *slots = cJSON_GetObjectItem(doc.root, "slots");

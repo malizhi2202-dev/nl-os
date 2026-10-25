@@ -319,7 +319,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T08</depends_on>
 </task>
 
-<task id="T13" parallel="true" status="pending" auto="true">
+<task id="T13" parallel="true" status="done" auto="true">
   <name>http 适配器（beta）：最小 HTTP/1.1，仅 http://（AC-8）</name>
   <read_files>
     src/nlbroker/adapter_cli.h
@@ -328,6 +328,9 @@ W5 HTTP+收口    T13[P] → T14                  │
   <write_files>
     src/nlbroker/adapter_http.c
     src/nlbroker/adapter_http.h
+    src/nlbroker/dispatch.c        <!-- 扩范围：http invoke/commit 分支 -->
+    src/libnlc/cip.c               <!-- 扩范围：失败响应须带 error（渲染顺序 bug） -->
+    src/libnlc/capability_registry.c <!-- 扩范围：非 cli 能力 path 可缺省 -->
     tests/unit/adapter_http_test.c
   </write_files>
   <action>

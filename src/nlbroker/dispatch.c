@@ -8,6 +8,7 @@
 #include "adapter_cli.h"
 #include "adapter_dbus.h"
 #include "adapter_mcp.h"
+#include "adapter_http.h"
 #include "audit.h"
 #include "cJSON.h"
 
@@ -55,6 +56,34 @@ static int parse_mcp_id(const char *id, char *server, size_t scap,
     memcpy(server, p, sl);
     server[sl] = '\0';
     memcpy(tool, slash + 1, tl + 1);
+    return 0;
+}
+
+/* 解析 http:<METHOD>|<url> */
+static int parse_http_id(const char *id, char *method, size_t mcap, char *url, size_t ucap)
+{
+    if (!id || strncmp(id, "http:", 5) != 0) return -1;
+    const char *p = id + 5;
+    const char *bar = strchr(p, '|');
+    if (!bar || bar == p || bar[1] == '\0') return -1;
+    size_t ml = (size_t)(bar - p);
+    size_t ul = strlen(bar + 1);
+    if (ml >= mcap || ul >= ucap) return -1;
+    memcpy(method, p, ml); method[ml] = '\0';
+    memcpy(url, bar + 1, ul + 1);
+    return 0;
+}
+
+static int add_http_plan_json(cJSON *root, const char *method, const char *url)
+{
+    cJSON *p = cJSON_CreateObject();
+    cJSON *h = cJSON_CreateObject();
+    if (!p || !h) return -1;
+    cJSON_AddStringToObject(h, "method", method);
+    cJSON_AddStringToObject(h, "url", url);
+    cJSON_AddItemToObject(p, "http", h);
+    cJSON_AddBoolToObject(p, "executed", 0);
+    cJSON_AddItemToObject(root, "plan", p);
     return 0;
 }
 
@@ -263,6 +292,54 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         return set_payload(resp, root);
     }
 
+    char http_method[16], http_url[2048];
+    if (parse_http_id(c->id, http_method, sizeof(http_method),
+                      http_url, sizeof(http_url)) == 0) {
+        NlHttpUrl u;
+        int pr = nl_http_parse_url(http_url, &u);
+        if (pr == 1) {
+            /* https：明确拒绝并给替代（AC-8） */
+            cJSON *alt = cJSON_CreateObject();
+            cJSON *arr = cJSON_CreateArray();
+            if (arr) {
+                cJSON_AddItemToArray(arr, cJSON_CreateString("cli:curl"));
+                cJSON_AddItemToObject(alt, "alternatives", arr);
+            }
+            (void)set_payload(resp, alt);
+            cJSON_Delete(root);
+            resp->ok = 0;
+            resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
+            emit_audit(c->id, "refused", nl_cap_effect_str(c->effect), c->perm_level,
+                       "refused", "scheme-unsupported", req->args_json, now_us() - t0);
+            return 0;
+        }
+        if (pr != 0) {
+            cJSON_Delete(root);
+            resp->ok = 0;
+            resp->error = NL_CIP_E_BAD_REQ;
+            return 0;
+        }
+        char token[NL_TICKET_TOKEN_LEN];
+        if (nl_ticket_issue(c->id, req->args_json, (int)c->effect, now_sec(), token) != 0) {
+            cJSON_Delete(root);
+            resp->ok = 0;
+            resp->error = NL_CIP_E_BAD_REQ;
+            return 0;
+        }
+        cJSON_AddStringToObject(root, "verdict",
+                                vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm");
+        cJSON_AddStringToObject(root, "reason", vr.reason);
+        (void)add_http_plan_json(root, http_method, http_url);
+        cJSON_AddStringToObject(root, "ticket", token);
+        cJSON_AddNumberToObject(root, "ttl_ms", (double)(NL_TICKET_TTL_SEC * 1000));
+        cJSON_AddBoolToObject(root, "untrusted_effect_attempt", vr.untrusted_effect_attempt);
+        emit_audit(c->id, vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm",
+                   nl_cap_effect_str(c->effect), c->perm_level, "ok", reason_code(&vr, c),
+                   req->args_json, now_us() - t0);
+        resp->ok = 1;
+        return set_payload(resp, root);
+    }
+
     char mcp_server[NL_MCP_NAME_MAX], mcp_tool[NL_MCP_NAME_MAX];
     int is_mcp = (parse_mcp_id(c->id, mcp_server, sizeof(mcp_server),
                                mcp_tool, sizeof(mcp_tool)) == 0);
@@ -350,6 +427,31 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         resp->ok = 0;
         resp->error = e;
         return 0;
+    }
+
+    char http_method[16], http_url[2048];
+    if (parse_http_id(c->id, http_method, sizeof(http_method),
+                      http_url, sizeof(http_url)) == 0) {
+        char out_buf[NL_CLI_MAX_OUT];
+        int hr = nl_http_request(http_method, http_url, "", 5000, out_buf, sizeof(out_buf));
+        if (hr == -2) {
+            resp->ok = 0;
+            resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
+            return 0;
+        }
+        cJSON *root = cJSON_CreateObject();
+        if (!root) return -1;
+        cJSON_AddStringToObject(root, "status", hr == 0 ? "ok" : "error");
+        cJSON_AddNumberToObject(root, "exit", hr == 0 ? 0 : 1);
+        cJSON_AddStringToObject(root, "output", hr == 0 ? out_buf : "");
+        cJSON_AddNullToObject(root, "snapshot_ref");
+        char aid[24] = "a-";
+        snprintf(aid + 2, sizeof(aid) - 2, "%ld", now_us());
+        cJSON_AddStringToObject(root, "audit_id", aid);
+        emit_audit(c->id, "commit", nl_cap_effect_str(c->effect), c->perm_level,
+                   hr == 0 ? "ok" : "error", "http-call", req->args_json, now_us() - t0);
+        resp->ok = 1;
+        return set_payload(resp, root);
     }
 
     char mcp_server[NL_MCP_NAME_MAX], mcp_tool[NL_MCP_NAME_MAX];

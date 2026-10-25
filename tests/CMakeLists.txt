@@ -195,3 +195,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/facade_mcp_test.c)
     target_link_libraries(test_facade_mcp PRIVATE nlc cjson)
     add_test(NAME facade_mcp COMMAND test_facade_mcp)
 endif()
+
+# http 适配器（T13）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_http_test.c)
+    add_executable(test_adapter_http unit/adapter_http_test.c)
+    target_include_directories(test_adapter_http PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker)
+    target_link_libraries(test_adapter_http PRIVATE nlc)
+    add_test(NAME adapter_http COMMAND test_adapter_http)
+endif()
