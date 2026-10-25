@@ -1,0 +1,962 @@
+[
+ {
+  "id": 1,
+  "input": "创建一个叫 test 的文件夹",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 2,
+  "input": "新建一个叫 build 的目录",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 3,
+  "input": "mkdir src",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 4,
+  "input": "建立个叫 backup 的文件夹",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 5,
+  "input": "创建个叫 temp 的目录",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 6,
+  "input": "创建一个叫 README.md 的文件",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 7,
+  "input": "新建文件叫 config.json",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 8,
+  "input": "touch main.c",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 9,
+  "input": "删除 test 目录",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 10,
+  "input": "删掉 /tmp/logs",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 11,
+  "input": "清理 /tmp 目录",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 12,
+  "input": "移除 build 文件夹",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 13,
+  "input": "移动 file.txt 到 /backup",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 14,
+  "input": "重命名 old.txt 为 new.txt",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 15,
+  "input": "复制 config.json 到 /etc/backup",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 16,
+  "input": "列出当前目录的文件",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 17,
+  "input": "显示目录内容",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 18,
+  "input": "ls",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 19,
+  "input": "查看 README.md 的内容",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 20,
+  "input": "cat /var/log/syslog",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 21,
+  "input": "查找所有 python 文件",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 22,
+  "input": "找所有 .log 文件",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 23,
+  "input": "进入 /home/user 目录",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 24,
+  "input": "cd /tmp",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 25,
+  "input": "切换到上级目录",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 26,
+  "input": "查看进程列表",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "process"
+ },
+ {
+  "id": 27,
+  "input": "显示占用内存最多的进程",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "process"
+ },
+ {
+  "id": 28,
+  "input": "查看系统负载",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "process"
+ },
+ {
+  "id": 29,
+  "input": "grep error *.log",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "search"
+ },
+ {
+  "id": 30,
+  "input": "搜索包含 TODO 的文件",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "search"
+ },
+ {
+  "id": 31,
+  "input": "运行 make",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "exec"
+ },
+ {
+  "id": 32,
+  "input": "重启 nginx 服务",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "exec"
+ },
+ {
+  "id": 33,
+  "input": "帮助",
+  "intent": "other",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "other"
+ },
+ {
+  "id": 34,
+  "input": "创建一个叫 demo 的文件夹",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 35,
+  "input": "建一个 logs 文件夹",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 36,
+  "input": "帮我创建目录 data",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 37,
+  "input": "在当前目录创建 report.txt 文件夹",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 38,
+  "input": "新建目录 notes.md",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 39,
+  "input": "创建一个 src 目录",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 40,
+  "input": "在 /tmp 下创建 backup 目录",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 41,
+  "input": "给我建个文件夹叫 tmpdir",
+  "intent": "create_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 42,
+  "input": "创建一个叫 demo 的文件",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 43,
+  "input": "新建文件 build",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 44,
+  "input": "建一个空文件 logs",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 45,
+  "input": "帮我创建一个 data 文件",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 46,
+  "input": "在当前目录新建 report.txt 文件",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 47,
+  "input": "创建空文件 notes.md",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 48,
+  "input": "生成一个叫 src 的文件",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 49,
+  "input": "touch backup",
+  "intent": "create_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 50,
+  "input": "列出当前目录",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 51,
+  "input": "查看当前目录内容",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 52,
+  "input": "显示当前目录下的文件",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 53,
+  "input": "列出 /home 下的内容",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 54,
+  "input": "看看这个目录有什么",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 55,
+  "input": "列出所有文件",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 56,
+  "input": "当前目录有哪些文件",
+  "intent": "list_dir",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 57,
+  "input": "查看 demo 的内容",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 58,
+  "input": "显示 build 文件内容",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 59,
+  "input": "打开并查看 logs",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 60,
+  "input": "读取 data",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "easy",
+  "category": "file_ops"
+ },
+ {
+  "id": 61,
+  "input": "cat report.txt",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 62,
+  "input": "看一下 notes.md 里写了什么",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 63,
+  "input": "显示文件 src 的内容",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 64,
+  "input": "打印 backup 的内容",
+  "intent": "view_file",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 65,
+  "input": "查找 demo 文件",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 66,
+  "input": "找到所有 build",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 67,
+  "input": "搜索名为 logs 的文件",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 68,
+  "input": "在 /home 下找 data",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 69,
+  "input": "find report.txt",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 70,
+  "input": "找出所有的 notes.md 文件",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 71,
+  "input": "定位 src 文件",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 72,
+  "input": "搜索文件 backup",
+  "intent": "find_files",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 73,
+  "input": "删除 demo",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 74,
+  "input": "删掉 build 文件",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 75,
+  "input": "把 logs 删了",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 76,
+  "input": "移除 data",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 77,
+  "input": "清理 report.txt 目录",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 78,
+  "input": "删除叫 notes.md 的文件",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 79,
+  "input": "删除 /tmp 下的 src",
+  "intent": "delete",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 80,
+  "input": "把 demo 移动到 /tmp",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 81,
+  "input": "移动 build 到 /home/user",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 82,
+  "input": "将 logs 挪到 backup",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 83,
+  "input": "把 data 重命名为 archive",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 84,
+  "input": "mv report.txt /tmp",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 85,
+  "input": "移动到 /home/user 目录",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 86,
+  "input": "把文件 src 移到 backup",
+  "intent": "move",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 87,
+  "input": "复制 demo 到 /tmp",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 88,
+  "input": "拷贝 build 到 /home/user",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 89,
+  "input": "把 logs 复制一份",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 90,
+  "input": "cp data archive",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 91,
+  "input": "复制文件 report.txt 到 /tmp 目录",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 92,
+  "input": "帮我复制 notes.md 到 /home/user",
+  "intent": "copy",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 93,
+  "input": "进入 demo 目录",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 94,
+  "input": "切换到 build",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 95,
+  "input": "到 logs 目录下",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 96,
+  "input": "cd data",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 97,
+  "input": "进入 /home",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 98,
+  "input": "跳到 notes.md",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 99,
+  "input": "切到上级目录",
+  "intent": "change_dir",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "file_ops"
+ },
+ {
+  "id": 100,
+  "input": "查看进程",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 101,
+  "input": "显示所有进程",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 102,
+  "input": "当前有哪些进程",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 103,
+  "input": "占用内存最多的进程",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 104,
+  "input": "ps",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 105,
+  "input": "看看 CPU 占用",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 106,
+  "input": "列出进程",
+  "intent": "show_process",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "process"
+ },
+ {
+  "id": 107,
+  "input": "在 demo 里搜索 /tmp",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 108,
+  "input": "搜索包含 /home/user 的文件",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 109,
+  "input": "grep backup",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 110,
+  "input": "查找内容 archive",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 111,
+  "input": "在文件中查找 /tmp",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 112,
+  "input": "搜一下 /home/user 出现在哪",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 113,
+  "input": "查找包含 backup 的行",
+  "intent": "search_content",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "search"
+ },
+ {
+  "id": 114,
+  "input": "运行 demo",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ },
+ {
+  "id": 115,
+  "input": "执行 build 命令",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ },
+ {
+  "id": 116,
+  "input": "帮我跑一下 logs",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ },
+ {
+  "id": 117,
+  "input": "执行 make",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ },
+ {
+  "id": 118,
+  "input": "运行脚本 report.txt",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ },
+ {
+  "id": 119,
+  "input": "启动 notes.md 程序",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ },
+ {
+  "id": 120,
+  "input": "执行命令 src",
+  "intent": "run_cmd",
+  "entities": {},
+  "difficulty": "medium",
+  "category": "exec"
+ }
+]

@@ -213,3 +213,23 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/capability_refuse_test.c)
     target_link_libraries(test_capability_refuse PRIVATE nlc cjson)
     add_test(NAME capability_refuse COMMAND test_capability_refuse)
 endif()
+
+# 决策层模型无关部分（T10-T12 · nl-capability-runtime 段 2）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/decision_test.c)
+    add_executable(test_decision unit/decision_test.c)
+    target_include_directories(test_decision PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_decision PRIVATE nlc cjson)
+    add_test(NAME decision COMMAND test_decision)
+endif()
+
+# 中文评测集（T13 · nl-capability-runtime 段 2）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/benchmark_test.c)
+    add_executable(test_benchmark unit/benchmark_test.c)
+    target_include_directories(test_benchmark PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_compile_definitions(test_benchmark PRIVATE
+        BENCHMARK_PATH="${CMAKE_SOURCE_DIR}/models/benchmarks/nl-commands-zh-v2.json")
+    target_link_libraries(test_benchmark PRIVATE nlc cjson)
+    add_test(NAME benchmark COMMAND test_benchmark)
+endif()
