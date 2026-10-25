@@ -167,3 +167,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_cli_test.c)
     target_link_libraries(test_adapter_cli PRIVATE nlc cjson)
     add_test(NAME adapter_cli COMMAND test_adapter_cli)
 endif()
+
+# dbus 适配器（T09/T10）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_dbus_test.c)
+    add_executable(test_adapter_dbus unit/adapter_dbus_test.c)
+    target_include_directories(test_adapter_dbus PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_adapter_dbus PRIVATE nlc cjson)
+    add_test(NAME adapter_dbus COMMAND test_adapter_dbus)
+endif()

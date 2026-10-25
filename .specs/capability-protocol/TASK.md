@@ -226,7 +226,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T02,T03,T04,T05,T06,T07</depends_on>
 </task>
 
-<task id="T09" parallel="true" status="pending" auto="true">
+<task id="T09" parallel="true" status="done" auto="true">
   <name>dbus 适配器：busctl/gdbus 子进程桥（AC-7）</name>
   <read_files>
     src/nlbroker/adapter_cli.h
@@ -235,6 +235,8 @@ W5 HTTP+收口    T13[P] → T14                  │
   <write_files>
     src/nlbroker/adapter_dbus.c
     src/nlbroker/adapter_dbus.h
+    src/nlbroker/dispatch.c        <!-- 扩范围：按命名空间路由 -->
+    src/nlbroker/main.c            <!-- 扩范围：--scan-dbus -->
     tests/unit/adapter_dbus_test.c
   </write_files>
   <action>
@@ -248,7 +250,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T08</depends_on>
 </task>
 
-<task id="T10" parallel="true" status="pending" auto="true">
+<task id="T10" parallel="true" status="done" auto="true">
   <name>dbus 能力发现：busctl list → 注册表</name>
   <read_files>
     src/nlbroker/adapter_dbus.h
@@ -259,7 +261,7 @@ W5 HTTP+收口    T13[P] → T14                  │
     tests/unit/adapter_dbus_test.c
   </write_files>
   <action>
-    1. `nl_dbus_discover(registry)`：`busctl list --no-pager` 解析服务名，登记为 `dbus:<service>|*`（**仅登记服务，不展开方法**）
+    1. `nl_dbus_discover(registry)`：**改为自省 `org.freedesktop.DBus` 的方法**（原方案登记服务名会产生不可调用的能力，见 T10-SUMMARY）
     2. effect 缺省 `network`（DBus 服务多与网络/系统状态相关），perm 缺省 L2
     3. 标记 `effect_defaulted=1`
   </action>

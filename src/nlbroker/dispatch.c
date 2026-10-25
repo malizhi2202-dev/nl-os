@@ -6,6 +6,7 @@
 #include "verdict.h"
 #include "ticket.h"
 #include "adapter_cli.h"
+#include "adapter_dbus.h"
 #include "audit.h"
 #include "cJSON.h"
 
@@ -85,6 +86,14 @@ static int set_payload(NlCipResp *resp, cJSON *obj)
     if (rc == 0) snprintf(resp->payload_json, sizeof(resp->payload_json), "%s", s);
     free(s);
     return rc;
+}
+
+/* 按命名空间选择适配器；v1 支持 cli 与 dbus，mcp/http 在 W4/W5 */
+static int build_plan_for(const NlCapability *c, const char *args, NlPlan *plan)
+{
+    if (strncmp(c->id, "cli:", 4) == 0) return nl_cli_build_plan(c, args, plan);
+    if (strncmp(c->id, "dbus:", 5) == 0) return nl_dbus_build_plan(c, args, plan);
+    return -1;
 }
 
 static cJSON *cap_brief(const NlCapability *c)
@@ -219,7 +228,7 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
     }
 
     NlPlan plan;
-    if (nl_cli_build_plan(c, req->args_json, &plan) != 0) {
+    if (build_plan_for(c, req->args_json, &plan) != 0) {
         cJSON_Delete(root);
         resp->ok = 0;
         resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;   /* v1 仅 cli:；其余在 W3–W5 */
@@ -275,7 +284,7 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
     }
 
     NlPlan plan;
-    if (nl_cli_build_plan(c, req->args_json, &plan) != 0) {
+    if (build_plan_for(c, req->args_json, &plan) != 0) {
         resp->ok = 0;
         resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
         return 0;

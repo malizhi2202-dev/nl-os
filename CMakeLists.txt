@@ -103,6 +103,7 @@ add_executable(nlbroker
     src/nlbroker/verdict.c
     src/nlbroker/ticket.c
     src/nlbroker/adapter_cli.c
+    src/nlbroker/adapter_dbus.c
 )
 target_link_libraries(nlbroker PRIVATE nlc)
 
