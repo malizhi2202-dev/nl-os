@@ -6,19 +6,22 @@
 
 ## 当前位置
 
-- **活跃 Change**: `decision-fallback`（**已完成**：规则未命中先走决策层兜底，常见问句 11ms 不加载模型；ctest 34/34、exec 84/84、hook 35/35）
-- **当前阶段**: `nlsh-exec` 已过 7-integration（验收 **81/81**、`ctest` 31/31、四角色通过；确认策略经专家团统一为 ADR-019 并做了全矩阵落地测试），**等用户签核 UAT**
+- **活跃 Change**: `paraphrase-coverage`（**已完成**：语义簇覆盖测试 + 修掉"输入后卡死/变慢"三个缺陷）
+- **当前阶段**: 7-integration 通过 —— `ctest 36/36`、`verify_exec.sh 86/86`、`verify_hook.sh 35/35`、
+  语义簇 121/121 + 留出集 55/55；已 `install_local.sh` 重装并真机交互验证
 - **已可安装使用**: `bash scripts/install_local.sh` → `~/.local/bin/nlsh`（模型自动发现，无需 export）
-- **已安装版本**: 23:01 装的含惰性加载的 Release（`列出当前目录下的文件` = 0.04s / 7.6MB；规则未命中仍 1.9s / 677MB，属设计内）。**改完源码必须重跑 `install_local.sh`**，否则用户路径还是旧二进制
+- **已装版本**: 01:12 的 Release（`当前工作路径` = 0.04s / 7.5MB；需要模型的句子 1.3s 内如实拒绝）
 - **终端钩子已装**: `~/.bashrc` 标记块 → `~/.local/share/nl-os/nl-hook.bash`（卸载 `install_local.sh --uninstall-hook`）
-- **当前 Task**: 无未完成项；常见规则未命中已由决策层兜底（11ms），**剩下的只余需要路径参数的句子**（仍走 20s 模型或如实拒绝）
-- **当前 Task 补充**: `nl-capability-runtime/UAT.md` 的 12 个场景已由 AI 实跑 12/12（场景 3/4 由本 change 修复）
-- **模型已就位**: `~/.local/share/nl-os/qwen2.5-0.5b-q4_0.gguf`（428MB，Qwen2.5-0.5B-Instruct q4_0）
+- **当前 Task**: 无未完成项。剩下的是**需要路径参数**的说法（仍走模型或如实拒绝）与模型推理速度
+- **模型已就位**: `~/.local/share/nl-os/qwen2.5-0.5b-q4_0.gguf`（429MB / 409MiB）
+- **本机内存现实**: 常驻负载下 `MemAvailable` 约 0.7–0.9GB，而模型需求 818MB + 512MB 余量
+  → 资源闸门（ADR-023）会**拒绝加载**，本机当前基本走"规则 + 决策层"，这是正确行为不是故障
 - **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
-  - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`（CHANGE/REQUIREMENT/DESIGN/TASK/TEST/REVIEW/UAT + 14 个 SUMMARY）
+  - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`
   - 暂停中的 change → `@.specs/nl-capability-runtime/PROGRESS.md`
-  - 恢复历史上下文 → `@.specs/CONTEXT.md`、`@.specs/nl-os/`（一期 MVP 已完成）
+  - 本次改动 → `@.specs/adr/023-spawn-detach-and-mem-gate.md`、`@.specs/paraphrase-coverage/TEST.md`
+  - 恢复历史上下文 → `@.specs/CONTEXT.md`、`@.specs/nl-os/`
 
 ## 流程欠账（2026-10-25 自查发现，待补）
 
@@ -50,6 +53,13 @@
 
 ## 决策日志（最近 10 条，倒序）
 
+- `[2026-10-26]` **修"输入后卡死/变慢"（ADR-023）**：①`spawn_daemon` 单 fork + `waitpid(守护进程)`
+  → 终端无限挂起（实测 2 分 21 秒），改双 fork + `spawn_detached_test` 锁 500ms；②加载模型前过
+  `resource_gate`（`文件×2 + 512MB` 余量），内存不够就降级而不是拖垮整机；③召回缺口用**语义簇覆盖测试**发现
+  （`tests/paraphrase/`，调参集 73%→100%、留出集 **84%** 揭示过拟合）—— `@.specs/adr/023-spawn-detach-and-mem-gate.md`
+- `[2026-10-26]` **ASCII 关键词必须词边界**：`{"cp"}` 子串命中「占**CPU**」→ `cp -r`（提问变拷贝）
+- `[2026-10-26]` **`template_id == 0` 是通配符**：给 `NL_INTENT_OTHER` 加第一个模板会静默改变
+  `{"怎么"}→OTHER,tmpl 0` 的规则（「怎么样」曾变成查端口）—— 新模板改挂 `SHOW_PROCESS`
 - `[2026-10-25]` **决策层兜底（ADR-022）**：规则未命中 → 候选收缩认出工具 → 用**审查过的只读默认参数**执行，不加载模型（`显示当前工作目录` 由 20s/"无法理解" 变成 `pwd` 11ms）；只对 L1 生效、参数为表内字面量、表外不猜——`@.specs/decision-fallback/`
 - `[2026-10-25]` **常驻解析进程 `nlsh --serve`**：模型只加载一次、空闲卸载；只在 TTY 自动拉起；三级回退（规则→常驻→进程内）——`@.specs/adr/021-inferd-daemon.md`。实测省 1.8s/次的加载，但推理 20s 仍是瓶颈
 - `[2026-10-25]` **`cd` 由父 shell 执行**：`bash` 的 `command_not_found_handle` 在子 shell 里跑，钩子 cd 无效 → `nlsh` 写 `__NL_CD__ <dir>`，`PROMPT_COMMAND` 执行 `cd -- "$dir"`（不 eval）——`@.specs/adr/020-shell-builtin-parent-exec.md`

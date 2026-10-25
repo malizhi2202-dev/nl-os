@@ -175,6 +175,40 @@ static int connect_once(const char *path)
     return fd;
 }
 
+/*
+ * 双 fork 脱离：父进程只等中间进程（它 setsid 后立刻退出），所以毫秒级返回。
+ * 真正的守护进程是孙子进程 —— 绝不能等它，否则调用方的终端会一直挂住。
+ * 事故：旧实现单 fork + waitpid(守护进程)，终端在 do_wait 里挂了 2 分 21 秒。
+ */
+int nl_spawn_detached(const char *exe, char *const argv[])
+{
+    if (!exe || !*exe || !argv) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid > 0) {
+        waitpid(pid, NULL, 0);       /* 只回收中间进程；它马上退出 */
+        return 0;
+    }
+
+    /* ── 中间进程 ── */
+    setsid();
+    pid_t pid2 = fork();
+    if (pid2 < 0) _exit(127);
+    if (pid2 > 0) _exit(0);          /* 退出 → 上面的 waitpid 立刻返回 */
+
+    /* ── 孙子进程 = 真正的守护进程（非会话首进程，不受终端信号波及）── */
+    int devnull = open("/dev/null", O_RDWR);
+    if (devnull >= 0) {
+        dup2(devnull, STDIN_FILENO);
+        dup2(devnull, STDOUT_FILENO);
+        dup2(devnull, STDERR_FILENO);
+        if (devnull > 2) close(devnull);
+    }
+    execv(exe, argv);
+    _exit(127);
+}
+
 /* 拉起守护进程（脱离当前会话，不占用户的终端/管道） */
 static void spawn_daemon(const char *path)
 {
@@ -183,19 +217,9 @@ static void spawn_daemon(const char *path)
     if (n <= 0) return;
     exe[n] = '\0';
 
-    pid_t pid = fork();
-    if (pid != 0) { if (pid > 0) waitpid(pid, NULL, 0); return; }
-
-    setsid();
-    int devnull = open("/dev/null", O_RDWR);
-    if (devnull >= 0) {
-        dup2(devnull, STDIN_FILENO);
-        dup2(devnull, STDOUT_FILENO);
-        dup2(devnull, STDERR_FILENO);
-        if (devnull > 2) close(devnull);
-    }
-    execl(exe, "nlsh", "--serve", "--socket", path, (char *)NULL);
-    _exit(127);
+    char *argv[] = { (char *)"nlsh", (char *)"--serve", (char *)"--socket",
+                     (char *)path, NULL };
+    nl_spawn_detached(exe, argv);
 }
 
 static int ensure_running(const char *path)

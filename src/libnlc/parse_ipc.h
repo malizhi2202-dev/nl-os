@@ -22,6 +22,20 @@ int nl_inferd_socket_path(char *buf, size_t sz);
  */
 int nl_parse_remote(const char *input, NlParseResult *r, char *err, size_t errsz);
 
+/*
+ * 脱离当前会话启动一个后台进程（守护进程用）。
+ *
+ * 必须是「双 fork」：中间进程 setsid 后立刻退出，调用方的 waitpid 只等这一层、
+ * 毫秒级就返回；真正的守护进程是孙子进程，活多久都与调用方无关。
+ *
+ * 事故记录：此前的实现是单 fork + `waitpid(子进程)`，而子进程 exec 成了常驻守护
+ * 进程 —— 调用方的终端一直卡在 wait 里，直到守护进程退出（实测 2 分 21 秒仍在
+ * `do_wait`）。这条回归由 tests/unit/spawn_detached_test.c 守住。
+ *
+ * 成功返回 0（调用方立即返回），失败返回 -1。
+ */
+int nl_spawn_detached(const char *exe, char *const argv[]);
+
 /* 结果 ↔ JSON（守护进程与客户端共用，便于单测） */
 char *nl_parse_result_to_json(const NlParseResult *r);
 int   nl_parse_result_from_json(const char *json, NlParseResult *r, char *err, size_t errsz);

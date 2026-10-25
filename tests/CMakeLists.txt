@@ -307,3 +307,19 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/decision_cmd_test.c)
     target_link_libraries(test_decision_cmd PRIVATE nlc)
     add_test(NAME decision_cmd COMMAND test_decision_cmd)
 endif()
+
+# resource_gate 测试（加载模型前的内存闸门：宁可拒绝也不拖垮整机）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/resource_gate_test.c)
+    add_executable(test_resource_gate unit/resource_gate_test.c)
+    target_include_directories(test_resource_gate PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_resource_gate PRIVATE nlc)
+    add_test(NAME resource_gate COMMAND test_resource_gate)
+endif()
+
+# spawn_detached 测试（后台进程必须立刻返回，不能等守护进程退出）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/spawn_detached_test.c)
+    add_executable(test_spawn_detached unit/spawn_detached_test.c)
+    target_include_directories(test_spawn_detached PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_spawn_detached PRIVATE nlc)
+    add_test(NAME spawn_detached COMMAND test_spawn_detached)
+endif()

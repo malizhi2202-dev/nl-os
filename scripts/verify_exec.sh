@@ -219,9 +219,37 @@ chk "AC-14 规则可决定：目录已创建" "[ -d lazy_dir ]"
 chk "AC-14 规则可决定：未加载模型（RSS ${rss:-?}KB < 200MB）" "[ -n '$rss' ] && [ '$rss' -lt 200000 ]"
 # 真正需要模型的句子：规则不命中，且决策层也没有候选/表外工具（ADR-022 之后
 # `显示当前工作目录` 已由决策层兜底、不再加载模型，不能再拿来当"必然加载模型"的例子）
+#
+# ADR-023 之后要分两种情况断言：模型是否**应该**加载取决于当时的可用内存。
+# 一刀切的 "RSS > 300MB" 在内存紧张时会红，但那是**正确行为**，不是回归 ——
+#   · 内存够   → 必须真加载（RSS > 300MB）
+#   · 内存不够 → 必须**不**加载（RSS < 200MB）、如实说"内存不足"、且不许卡住
+# 两种情况都必须快速返回：卡住过一次（客户端 waitpid 等守护进程，挂了 2 分 21 秒）。
+model=$(ls "$HOME"/.local/share/nl-os/*.gguf /usr/share/nl-os/*.gguf 2>/dev/null | head -1)
+need_mb=0; avail_mb=0
+if [ -n "$model" ]; then
+    msize=$(stat -c %s "$model" 2>/dev/null || echo 0)
+    need_mb=$(( (msize + 1048575) / 1048576 * 2 ))
+fi
+avail_kb=$(sed -n 's/^MemAvailable: *\([0-9]*\).*/\1/p' /proc/meminfo 2>/dev/null)
+avail_mb=$(( ${avail_kb:-0} / 1024 ))
+
+t0=$(date +%s)
 t=$(/usr/bin/time -f "rss=%M" "$NLSH" -c '总结一下这个目录是干什么用的' 2>&1 >/dev/null | tail -1)
+took=$(( $(date +%s) - t0 ))
 rss2=$(printf '%s' "$t" | sed -n 's/.*rss=\([0-9]*\).*/\1/p')
-chk "AC-14 规则未命中：真加载模型（RSS ${rss2:-?}KB > 300MB）" "[ -n '$rss2' ] && [ '$rss2' -gt 300000 ]"
+out2=$("$NLSH" -c '总结一下这个目录是干什么用的' 2>&1)
+
+if [ "$need_mb" -gt 0 ] && [ "$avail_mb" -gt 0 ] && [ $((avail_mb - 512)) -ge "$need_mb" ]; then
+    chk "AC-14 规则未命中且内存充足：真加载模型（RSS ${rss2:-?}KB > 300MB）" \
+        "[ -n '$rss2' ] && [ '$rss2' -gt 300000 ]"
+else
+    echo "    （可用内存 ${avail_mb}MB 不足以放下 ${need_mb}MB 模型 + 512MB 余量 → 本机应走"拒绝加载"分支）"
+    chk "AC-14 内存不足：拒绝加载模型（RSS ${rss2:-?}KB < 200MB）" \
+        "[ -n '$rss2' ] && [ '$rss2' -lt 200000 ]"
+    chk "AC-14 内存不足：如实说明" "printf '%s' \"\$out2\" | grep -q '内存不足'"
+    chk "AC-14 内存不足：快速返回不卡住（${took}s < 30s）" "[ $took -lt 30 ]"
+fi
 
 # AC-15 决策层兜底：L1 只读工具认得出就执行，**不加载模型**，且表外/高危不猜
 t=$(/usr/bin/time -f "rss=%M" "$NLSH" -c '显示当前工作目录' 2>&1 >/dev/null | tail -1)

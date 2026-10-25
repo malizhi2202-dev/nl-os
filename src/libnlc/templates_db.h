@@ -91,6 +91,14 @@ static const NlCmdTemplate TEMPLATES[] = {
      "ps aux --sort=-%mem | head -20", {NULL}, "内存排序"},
     {1002,NL_INTENT_SHOW_PROCESS, NL_PERM_L1,
      "top -b -n 1",            {NULL},        "系统负载"},
+    /* 「系统负载是多少」「开机多久了」问的是 uptime，不是进程列表 */
+    {1003,NL_INTENT_SHOW_PROCESS, NL_PERM_L1,
+     "uptime",                 {NULL},        "负载与运行时长"},
+    /* 端口/连接：lsof 是 L1 只读；ss/netstat 未登记 → L4，不在这里放行。
+     * 注意 intent 不能用 NL_INTENT_OTHER：template_id==0 的语义是"该 intent 的第一个模板"，
+     * 而规则 122（{"怎么"}→OTHER, tmpl 0）会因此静默变成查端口（「怎么样」曾变成 lsof）。 */
+    {1301,NL_INTENT_SHOW_PROCESS, NL_PERM_L1,
+     "lsof -i -P -n",          {NULL},        "端口与网络连接"},
 
     /* ── search_content ── */
     {11, NL_INTENT_SEARCH_CONTENT, NL_PERM_L1,

@@ -86,6 +86,7 @@ add_library(nlc SHARED
     src/libnlc/exec.c
     src/libnlc/shell_builtin.c
     src/libnlc/parse_ipc.c
+    src/libnlc/resource_gate.c
     src/libnlc/confirm.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)

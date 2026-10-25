@@ -6,6 +6,7 @@
  */
 
 #include "nlc_api.h"
+#include "resource_gate.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,15 +16,42 @@ static NlModel *g_model = NULL;
 static char g_model_path[512];   /* 惰性初始化记下的路径；空 = 未配置模型 */
 static char g_error[1024];
 
-/* ============================================================
- * 生命周期
- * ============================================================ */
+/*
+ * 资源闸门：内存不够就不加载模型。
+ *
+ * 事故：8GB 机器上可用内存只剩 657MB，一句"规则未命中"的话照旧加载 428MB 模型
+ * （RSS 涨到 800MB），整机进入内存回收，用户看到的是"本来很快，现在全卡了"。
+ * 这里的选择是：**宁可这条不理解，也不拿整台机器的响应性去换**。
+ *
+ * 注意两点：
+ *   1. 拒绝加载时**不清空** g_model_path —— 内存释放后下一次请求能自动恢复；
+ *   2. NL_MODEL_MEM_FORCE=1 可跳过闸门（调试/内存充裕但 /proc 读不到的容器里用）。
+ */
+static int model_mem_gate(void)
+{
+    const char *force = getenv("NL_MODEL_MEM_FORCE");
+    if (force && strcmp(force, "1") == 0) return 0;
+
+    long need  = nl_model_need_mb(g_model_path);
+    long avail = nl_mem_available_mb();
+    if (nl_resource_gate_allow(need, avail, NL_MODEL_HEADROOM_MB)) return 0;
+
+    snprintf(g_error, sizeof(g_error),
+             "内存不足，没有加载模型（需约 %ld MB，当前可用 %ld MB，需为其它程序留 %d MB）。"
+             "这句话只能降级到规则层；释放内存后自动恢复，或用 NL_MODEL_MEM_FORCE=1 强制加载。",
+             need > 0 ? need : -1, avail, NL_MODEL_HEADROOM_MB);
+    fprintf(stderr,
+            "⚠️ 内存不足，未加载模型（需约 %ld MB，可用 %ld MB）——为免拖垮整机，降级到规则层\n",
+            need > 0 ? need : -1, avail);
+    return -1;
+}
 
 /* 真要解码时才加载：规则层能决定的句子不该付模型加载的代价 */
 static int ensure_model(void)
 {
     if (g_model) return 0;
     if (!g_model_path[0]) return -1;
+    if (model_mem_gate() != 0) return -1;
     g_model = nl_model_init(g_model_path);
     if (!g_model) {
         snprintf(g_error, sizeof(g_error), "nl_init: failed to load model '%s'", g_model_path);

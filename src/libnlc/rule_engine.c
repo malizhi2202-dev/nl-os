@@ -47,14 +47,40 @@ static void free_tokens(char **tokens, int count) {
     free(tokens);
 }
 
-/* 输入原文中是否包含某个关键词（子串匹配，忽略大小写） */
+/* 关键词是否「纯 ASCII 单词」（cp / ls / ps / top 这类命令名） */
+static int is_ascii_word(const char *w) {
+    if (!w || !*w) return 0;
+    for (const char *p = w; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (!(isalnum(c) || c == '_' || c == '-' || c == '.' || c == '/')) return 0;
+    }
+    return 1;
+}
+
+/* ASCII 单词必须在词边界上：`cp` 不能命中 `CPU`，`top` 不能命中 `desktop`。
+ * 中文关键词走子串匹配（中文没有空格分词），只有 ASCII 命令名需要这条。
+ * 事故：`{"cp"}` 是子串匹配 → 「看看谁在占CPU」被解析成 `cp -r`（一句提问变成拷贝）。 */
+static int ascii_boundary_ok(const char *s, const char *match, size_t len) {
+    if (match > s) {
+        unsigned char prev = (unsigned char)match[-1];
+        if (isalnum(prev) || prev == '_' || prev == '-' || prev == '.' || prev == '/') return 0;
+    }
+    unsigned char next = (unsigned char)match[len];
+    if (next && (isalnum(next) || next == '_' || next == '-' || next == '.' || next == '/')) return 0;
+    return 1;
+}
+
+/* 输入原文中是否包含某个关键词（中文子串匹配；ASCII 命令名要求词边界，忽略大小写） */
 static int has_keyword(const char *input, const char *word) {
     if (!input || !word) return 0;
-    /* 简单的子串搜索（忽略大小写） */
     size_t wlen = strlen(word);
     if (wlen == 0) return 0;
+
+    int ascii = is_ascii_word(word);
     for (const char *p = input; *p; p++) {
-        if (strncasecmp(p, word, wlen) == 0) return 1;
+        if (strncasecmp(p, word, wlen) == 0) {
+            if (!ascii || ascii_boundary_ok(input, p, wlen)) return 1;
+        }
     }
     return 0;
 }
@@ -211,6 +237,18 @@ const char *nl_intent_name(NlIntentType intent) {
  * 公共 API
  * ============================================================ */
 
+/* 槽位值里是否含 ASCII 字母数字（即"看起来像个命令/文件名"） */
+static int slots_have_ascii(const NlRuleResult *r) {
+    for (int i = 0; i < r->slot_count; i++) {
+        const char *v = r->slots[i].value;
+        if (!v) continue;
+        for (const char *p = v; *p; p++) {
+            if (isalnum((unsigned char)*p)) return 1;
+        }
+    }
+    return 0;
+}
+
 int nl_rule_match(const char *input, NlRuleResult *result) {
     if (!input || !result) return -1;
     memset(result, 0, sizeof(NlRuleResult));
@@ -254,6 +292,15 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
                 result->slots[result->slot_count].value = value;
                 result->slot_count++;
             }
+        }
+
+        /* 「运行/执行 X」要求 X 像个命令（含 ASCII 字母数字）。
+         * 否则「查看运行时间」会把「时间」当成要执行的命令，报「本机没有该能力：cli:时间」，
+         * 而它其实是在问 uptime。无槽位的规则（如 {"make"}）不受影响。 */
+        if (rule->intent == NL_INTENT_RUN_CMD && result->slot_count > 0 &&
+            !slots_have_ascii(result)) {
+            nl_rule_result_free(result);   /* 这次命中不成立：丢弃后继续试后面的规则 */
+            continue;
         }
 
         return 0;
