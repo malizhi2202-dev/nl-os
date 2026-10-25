@@ -122,7 +122,6 @@ int nl_http_request(const char *method, const char *url, const char *body,
         return -1;
     }
 
-    size_t used = 0;
     long deadline = http_now_ms() + timeout_ms;
     char raw[8192];
     size_t rawlen = 0;
@@ -153,7 +152,5 @@ int nl_http_request(const char *method, const char *url, const char *body,
     size_t take = bodylen < cap - 1 ? bodylen : cap - 1;
     memcpy(out, bodyp, take);
     out[take] = '\0';
-    used = take;
-    (void)used;
     return 0;
 }

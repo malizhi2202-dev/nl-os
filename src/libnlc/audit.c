@@ -103,6 +103,7 @@ int nl_audit_emit(const NlAuditRec *rec)
     cJSON_AddStringToObject(o, "result", rec->result ? rec->result : "");
     cJSON_AddStringToObject(o, "reason", rec->reason ? rec->reason : "");
     cJSON_AddStringToObject(o, "args_hash", in_hash);
+    cJSON_AddStringToObject(o, "corr", rec->corr ? rec->corr : "");
 
     char *line = cJSON_PrintUnformatted(o);
     cJSON_Delete(o);
@@ -137,14 +138,19 @@ int nl_audit_query(long since, int limit, char *out, size_t cap)
         return 0;
     }
 
-    size_t used = 0;
-    int count = 0;
+    /* 环形保留"最新的 limit 条"：审计查询用于排障，用户要的是最近记录 */
+    char **ring = calloc((size_t)limit, sizeof(char *));
+    if (!ring) {
+        fclose(f);
+        snprintf(out, cap, "[]");
+        return -1;
+    }
+    int seen = 0;
     char *line = NULL;
     size_t line_cap = 0;
     ssize_t n;
 
-    out[used++] = '[';
-    while ((n = getline(&line, &line_cap, f)) > 0 && count < limit) {
+    while ((n = getline(&line, &line_cap, f)) > 0) {
         while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = '\0';
         if (n == 0) continue;
 
@@ -152,23 +158,47 @@ int nl_audit_query(long since, int limit, char *out, size_t cap)
         if (!o) continue;
         cJSON *ts = cJSON_GetObjectItem(o, "ts");
         double tsv = cJSON_IsNumber(ts) ? cJSON_GetNumberValue(ts) : 0;
-        if ((long)tsv < since) {
-            cJSON_Delete(o);
-            continue;
-        }
         cJSON_Delete(o);
+        if ((long)tsv < since) continue;
 
-        size_t need = (size_t)n + 2;
-        if (used + need + 2 >= cap) break;
-        if (count > 0) out[used++] = ',';
-        memcpy(out + used, line, (size_t)n);
-        used += (size_t)n;
-        count++;
+        int slot = seen % limit;
+        free(ring[slot]);
+        ring[slot] = strdup(line);
+        seen++;
     }
     free(line);
     fclose(f);
 
+    int count = (seen < limit) ? seen : limit;
+    int first = (seen < limit) ? 0 : (seen % limit);
+
+    /* 组装为有序数组（旧 → 新） */
+    const char *items[NL_AUDIT_MAX_LIMIT];
+    for (int i = 0; i < count; i++)
+        items[i] = ring[(first + i) % limit];
+
+    /* 字节不够时**从最旧的开始丢**，保证最近记录一定在结果里 */
+    size_t total = 2;   /* [] */
+    for (int i = 0; i < count; i++) total += strlen(items[i]) + 1;
+    int start = 0;
+    while (start < count && total + 1 > cap) {
+        total -= strlen(items[start]) + 1;
+        start++;
+    }
+
+    size_t used = 0;
+    out[used++] = '[';
+    for (int i = start; i < count; i++) {
+        size_t rl = strlen(items[i]);
+        if (used + rl + 2 >= cap) break;
+        if (used > 1) out[used++] = ',';
+        memcpy(out + used, items[i], rl);
+        used += rl;
+    }
     out[used++] = ']';
     out[used] = '\0';
-    return count;
+
+    for (int i = 0; i < limit; i++) free(ring[i]);
+    free(ring);
+    return count - start;
 }

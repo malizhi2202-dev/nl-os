@@ -145,6 +145,7 @@ int nl_cip_parse(const char *line, NlCipReq *out)
         if (!cJSON_IsArray(ids)) { rc = NL_CIP_E_BAD_REQ; goto done; }
         int n = cJSON_GetArraySize(ids);
         if (n <= 0) { rc = NL_CIP_E_BAD_REQ; goto done; }
+        if (n > NL_CIP_MAX_REQIDS) { rc = NL_CIP_E_BAD_REQ; goto done; }
         for (int i = 0; i < n && out->id_count < NL_CIP_MAX_REQIDS; i++) {
             const char *sv = cJSON_GetStringValue(cJSON_GetArrayItem(ids, i));
             if (!sv) { rc = NL_CIP_E_BAD_REQ; goto done; }

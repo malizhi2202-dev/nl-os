@@ -22,6 +22,7 @@ typedef struct {
     const char *result;        /* ok | refused | error */
     const char *reason;
     const char *input;         /* 原文；内部只落 sha256 前 16 hex */
+    const char *corr;          /* 关联键：invoke 与 commit 用同一 ticket 前缀，便于回放配对 */
 } NlAuditRec;
 
 int         nl_audit_emit(const NlAuditRec *rec);

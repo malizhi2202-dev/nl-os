@@ -3,6 +3,7 @@
  */
 #include "facade_mcp.h"
 #include "cip.h"
+#include "audit.h"
 #include "cJSON.h"
 
 #include <ctype.h>
@@ -136,7 +137,19 @@ static int do_tools_call(NlDispatch *d, cJSON *id, cJSON *params,
     if (!c) return write_error(id, -32601, "unknown tool", out, cap);
 
     if (c->perm_level >= 3) {
-        /* AC-6：L3/L4 一律拒绝（并留审计痕迹，由 dispatch 的裁决路径记录） */
+        /* AC-6：L3/L4 一律拒绝，并留审计痕迹 */
+        NlAuditRec rec;
+        memset(&rec, 0, sizeof(rec));
+        rec.capability_id = c->id;
+        rec.perm_level = c->perm_level;
+        rec.verdict = "deny";
+        rec.effect = nl_cap_effect_str(c->effect);
+        rec.probability = -1;
+        rec.result = "refused";
+        rec.reason = "facade-not-exposed";
+        rec.input = "{}";
+        rec.corr = "";
+        (void)nl_audit_emit(&rec);
         return write_error(id, -32000,
                            "denied: capability requires level >= L3 and is not exposed via MCP",
                            out, cap);

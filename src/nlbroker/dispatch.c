@@ -125,7 +125,7 @@ static const char *reason_code(const NlVerdictResult *vr, const NlCapability *c)
 
 static void emit_audit(const char *cap_id, const char *verdict, const char *effect,
                        int perm, const char *result, const char *reason,
-                       const char *args_json, long dur_us)
+                       const char *args_json, long dur_us, const char *corr)
 {
     NlAuditRec r;
     memset(&r, 0, sizeof(r));
@@ -139,6 +139,7 @@ static void emit_audit(const char *cap_id, const char *verdict, const char *effe
     r.result = result;
     r.reason = reason;
     r.input = args_json;
+    r.corr = corr;
     (void)nl_audit_emit(&r);
 }
 
@@ -258,6 +259,15 @@ static int add_plan_json(cJSON *root, const NlPlan *plan)
 static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
 {
     long t0 = now_us();
+
+    /* 每会话 invoke 限速（ADR-017 / T05） */
+    if (!nl_ticket_rate_ok(now_sec())) {
+        emit_audit(req->capability, "refused", "", 0, "refused", "rate-limited",
+                   req->args_json, now_us() - t0, "");
+        resp->ok = 0;
+        resp->error = NL_CIP_E_POLICY_DENY;
+        return 0;
+    }
     const NlCapability *c = nl_cap_find(d->registry, req->capability);
     if (!c) {
         resp->ok = 0;
@@ -287,7 +297,7 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         }
         cJSON_AddBoolToObject(root, "untrusted_effect_attempt", vr.untrusted_effect_attempt);
         emit_audit(c->id, "deny", nl_cap_effect_str(c->effect), c->perm_level,
-                   "refused", reason_code(&vr, c), req->args_json, now_us() - t0);
+                   "refused", reason_code(&vr, c), req->args_json, now_us() - t0, "");
         resp->ok = 1;
         return set_payload(resp, root);
     }
@@ -310,7 +320,7 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
             resp->ok = 0;
             resp->error = NL_CIP_E_SCHEME_UNSUPPORTED;
             emit_audit(c->id, "refused", nl_cap_effect_str(c->effect), c->perm_level,
-                       "refused", "scheme-unsupported", req->args_json, now_us() - t0);
+                       "refused", "scheme-unsupported", req->args_json, now_us() - t0, "");
             return 0;
         }
         if (pr != 0) {
@@ -335,7 +345,7 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         cJSON_AddBoolToObject(root, "untrusted_effect_attempt", vr.untrusted_effect_attempt);
         emit_audit(c->id, vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm",
                    nl_cap_effect_str(c->effect), c->perm_level, "ok", reason_code(&vr, c),
-                   req->args_json, now_us() - t0);
+                   req->args_json, now_us() - t0, token);
         resp->ok = 1;
         return set_payload(resp, root);
     }
@@ -368,7 +378,7 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         cJSON_AddBoolToObject(root, "untrusted_effect_attempt", vr.untrusted_effect_attempt);
         emit_audit(c->id, vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm",
                    nl_cap_effect_str(c->effect), c->perm_level, "ok", reason_code(&vr, c),
-                   req->args_json, now_us() - t0);
+                   req->args_json, now_us() - t0, token);
         resp->ok = 1;
         return set_payload(resp, root);
     }
@@ -400,7 +410,7 @@ static int do_invoke(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
 
     emit_audit(c->id, vr.verdict == NL_VERDICT_ALLOW ? "allow" : "confirm",
                nl_cap_effect_str(c->effect), c->perm_level, "ok", reason_code(&vr, c),
-               req->args_json, now_us() - t0);
+               req->args_json, now_us() - t0, token);
 
     nl_cli_plan_free(&plan);
     resp->ok = 1;
@@ -423,7 +433,8 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         if (ts == NL_TICKET_EXPIRED) e = NL_CIP_E_TICKET_EXPIRED;
         else if (ts == NL_TICKET_MISMATCH) e = NL_CIP_E_TICKET_MISMATCH;
         emit_audit(c->id, "commit", nl_cap_effect_str(c->effect), c->perm_level,
-                   "refused", nl_ticket_status_str(ts), req->args_json, now_us() - t0);
+                   "refused", nl_ticket_status_str(ts), req->args_json, now_us() - t0,
+                   req->ticket);
         resp->ok = 0;
         resp->error = e;
         return 0;
@@ -449,7 +460,8 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         snprintf(aid + 2, sizeof(aid) - 2, "%ld", now_us());
         cJSON_AddStringToObject(root, "audit_id", aid);
         emit_audit(c->id, "commit", nl_cap_effect_str(c->effect), c->perm_level,
-                   hr == 0 ? "ok" : "error", "http-call", req->args_json, now_us() - t0);
+                   hr == 0 ? "ok" : "error", "http-call", req->args_json, now_us() - t0,
+                   req->ticket);
         resp->ok = 1;
         return set_payload(resp, root);
     }
@@ -475,7 +487,7 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
         cJSON_AddStringToObject(root, "audit_id", aid);
         emit_audit(c->id, "commit", nl_cap_effect_str(c->effect), c->perm_level,
                    call_rc == 0 ? "ok" : "error", "mcp-call",
-                   req->args_json, now_us() - t0);
+                   req->args_json, now_us() - t0, req->ticket);
         resp->ok = 1;
         return set_payload(resp, root);
     }
@@ -505,7 +517,7 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
 
     emit_audit(c->id, "commit", nl_cap_effect_str(c->effect), c->perm_level,
                (r.status == NL_CLI_OK) ? "ok" : "error",
-               nl_cli_status_str(r.status), req->args_json, now_us() - t0);
+               nl_cli_status_str(r.status), req->args_json, now_us() - t0, req->ticket);
 
     resp->ok = 1;
     return set_payload(resp, root);
@@ -514,7 +526,7 @@ static int do_commit(NlDispatch *d, const NlCipReq *req, NlCipResp *resp)
 static int do_audit(const NlCipReq *req, NlCipResp *resp)
 {
     /* 响应体受 payload_json 限制（4KB）：约可容纳 15 条；更多请用 since 翻页 */
-    char buf[3500];
+    char buf[7000];
     (void)nl_audit_query(req->since, req->audit_limit, buf, sizeof(buf));
     static const char prefix[] = "{\"records\":";
     static const char suffix[] = "}";

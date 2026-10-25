@@ -63,7 +63,7 @@ typedef struct {
     char     id[NL_CIP_MAX_ID];
     int      ok;
     NlCipErr error;
-    char     payload_json[4096];
+    char     payload_json[8192];
 } NlCipResp;
 
 /* 解析一行；成功返回 NL_CIP_OK，失败返回具体错误码 */

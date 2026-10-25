@@ -147,11 +147,33 @@ try:
     check("AC-6 facade denies L3 call", "error" in lines[1], lines[1])
     check("AC-6 facade executes L1", "facade-ok" in json.dumps(lines[2]), lines[2])
 
+    # T-FIX-02：invoke 与 commit 必须能通过 corr 关联
+    recs_corr = call({"v":1,"id":"15b","op":"audit","since":0,"limit":50}).get("result", {}).get("records", [])
+    inv = [r for r in recs_corr if r.get("verdict") in ("confirm","allow") and r.get("corr")]
+    com = [r for r in recs_corr if r.get("verdict") == "commit" and r.get("corr")]
+    shared = (set(r["corr"] for r in inv) & set(r["corr"] for r in com)) if inv and com else set()
+    check("T-FIX-02 invoke/commit correlated by corr", len(shared) >= 1, {"inv": len(inv), "com": len(com)})
+
+    # T-FIX-01：门面拒绝 L3 必须留审计
+    recs_f = call({"v":1,"id":"15c","op":"audit","since":0,"limit":50}).get("result", {}).get("records", [])
+    check("T-FIX-01 facade deny audited",
+          any(r.get("reason") == "facade-not-exposed" for r in recs_f),
+          [r.get("reason") for r in recs_f][:5])
+
     # AC-9 审计
     recs = call({"v":1,"id":"16","op":"audit","since":0,"limit":50}).get("result", {}).get("records", [])
     need = ("audit_id","verdict","capability_id","args_hash")
     check("AC-9 audit fields", bool(recs) and all(k in recs[0] for k in need), recs[:1])
     check("AC-9 no plaintext", "/etc/passwd" not in json.dumps(recs), "leak")
+
+    # T-FIX-03：invoke 限速（101 次同一秒内应被拒）
+    limited = False
+    for i in range(120):
+        rr = call({"v":1,"id":"rl%d" % i,"op":"invoke","capability":"cli:echo","args":{"args":["x"]}})
+        if (not rr.get("ok")) and rr.get("error") == "E_POLICY_DENY":
+            limited = True
+            break
+    check("T-FIX-03 invoke rate limited", limited, "no E_POLICY_DENY observed")
 
     # AC-10 资源（Release 构建 + 512MB 地址空间限制）
     subprocess.run(["cmake","-S",ROOT,"-B",REL,"-DCMAKE_BUILD_TYPE=Release","-DBUILD_TESTING=OFF"],

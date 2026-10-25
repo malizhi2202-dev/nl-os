@@ -8,8 +8,8 @@
 
 - **活跃 Change**: `capability-protocol`（已进入 DEV，T01 完成）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: REVIEW（capability-protocol；TEST.md 已出（测试门 3/4），进入 6-review 三轮审查）
-- **当前 Task**: 6-review（三轮审查 + T-FIX 修复）
+- **当前阶段**: INTEGRATION（capability-protocol；REVIEW.md 三轮完成 + T-FIX-01~05 已修，G4 3/4 → 7-integration）
+- **当前 Task**: 7-integration（UAT.md + 归档 + STATE/CHANGELOG/LESSONS）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
   - 活跃 change → 先读 `@.specs/capability-protocol/TASK.md` + 本文件「流程欠账」段
