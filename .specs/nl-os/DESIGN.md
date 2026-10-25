@@ -45,7 +45,7 @@
 | **D5** | fail-closed 安全策略 | fail-open（挂了就放行） | 需求明确"L4 打死不能执行"；权限守护挂了意味着安全边界消失→拒绝所有 NL 操作比放行危险操作更安全 | 权限守护故障 = NL-Shell 基本不可用（但传统命令透传不受影响） |
 | **D6** | 规则引擎优先于模型 | 模型优先 | 高频命令需要零延迟+100%确定；规则覆盖的是"确定性高"的场景；模型处理"模糊但安全"的场景 | 规则和模型的边界划分是核心工程挑战——规则太多退化、太少不可靠 |
 | **D7** | C11 标准（非 C17/C23） | C17 / C99 | C11 有 `_Generic`/`_Static_assert`/`_Atomic` 等对系统编程有用的特性；旧 ARM 交叉编译链（如 Buildroot 2020）对 C17 支持不完整 | 放弃 C17 的 `[[fallthrough]]`/`<stdatomic.h>` 改进，但影响小 |
-| **D8** | `.tools` 先于 `.nl` 交付 | 直接做完整 NL-C | .tools 是 MVP 可验证的最小 NL 编程单元；积累用户数据后再设计 .nl 语法；防止过早抽象 | .tools 的简单性可能限制早期用户的使用场景，但 MVP 目标就是验证核心价值 |
+| **D8** | NL-C 只交付 `.tools`，永久放弃 `.nl` | 两层交付（.tools → .nl）/ 直接做完整 NL-C | `.nl`（函数/包/导入/类型/多范式）无成功先例，且表达力越强越无法静态判定危险性，与安全目标冲突；`.tools` 已是可直接交付的最小 NL 编程单元 | 表达能力锁死在顺序指令序列（无条件分支/循环），复杂逻辑交给传统 shell/C（ADR-011） |
 | **D9** | 模型只做意图提取 + 实体识别（分类问题），不做命令生成 | 端到端 seq2seq 生成命令 | 分类问题准确率远高于生成问题（尤其对小模型）；模板填充保证命令结构安全；模型输出的 entity 值通过白名单+stat()验证 | 表达能力受限于预定义的 intent 枚举和模板数量；复杂操作可能需要更多模板 |
 | **D10** | Benchmark 先于模型选型 | 先选模型再测试 | 避免"拍脑袋选模型"→ 发现不适用→ 推倒重来；benchmark 是持续投资（每次模型更新都要跑）；数据驱动决策 | MVP 前期需要投入人力建设 benchmark（1000 条标注数据），但这是 C 代码开发前的纯数据工作 |
 
@@ -416,7 +416,7 @@ nl-run exit code = 0
 |---|---|---|
 | `001-four-layer-pipeline.md` | 四层混合管线架构 | D1, D6, D9 |
 | `002-permission-model.md` | L1-L4 权限分级 + 安全网关前置 | D2, D5 |
-| `003-nl-c-syntax.md` | NL-C 两层语法设计 (.tools → .nl) | D8 |
+| `003-nl-c-syntax.md` | NL-C 语法设计（.tools；.nl 已由 ADR-011 取消） | D8 |
 | `004-model-selection.md` | Benchmark 先于模型选型 | D10 |
 | `005-kernel-integration.md` | 内核集成渐进路线 (用户态 → eBPF) | — |
 | `006-dependency-strategy.md` | Fork+Vendor 依赖策略 | D3, D4 |
@@ -424,6 +424,7 @@ nl-run exit code = 0
 | `008-agent-architecture.md` | Agent 扩展点 API 设计 | — |
 | `009-testing-strategy.md` | 五层测试金字塔 | — |
 | `010-c11-gguf-lock.md` | C11 标准 + GGUF v3 锁定 | D7 |
+| `011-drop-nl-language.md` | 放弃 `.nl` 完整语言，NL-C 收敛为 `.tools` | D8 |
 
 ---
 
@@ -447,7 +448,7 @@ nl-run exit code = 0
 - **模型 OTA 更新**：Phase 2，MVP 使用系统包管理器分发模型
 - **动态 few-shot 检索（向量相似度）**：Phase 2，MVP 使用静态 few-shot 或零样本
 - **多用户协作/权限隔离**：Phase 3
-- **`.nl` 完整编程语言（函数/包/导入/类型）**：Phase 2
+- **`.nl` 完整编程语言（函数/包/导入/类型）**：out（永久 · ADR-011）
 - **GUI/语音/多模态输入**：out（永久）
 - **Windows/macOS 支持**：out（永久）
 - **GPU 加速推理**：out（永久——核心价值是纯 CPU 运行）
@@ -461,7 +462,7 @@ nl-run exit code = 0
 | 路径 | 能力 | 触发场景 | 复用建议 |
 |---|---|---|---|
 | `src/libnlc/path_safety.c` | 路径规范化 + 白名单 + 黑名单校验 | 任何需要验证文件路径安全性的场景 | 其他 Linux 安全工具可独立使用此模块 |
-| `src/libnlc/template_fill.c` | 意图+实体 → 命令模板填充引擎 | 任何 NL→结构化输出的场景 | 模板定义格式可复用；二期 NL-C 包系统可基于此扩展 |
+| `src/libnlc/template_fill.c` | 意图+实体 → 命令模板填充引擎 | 任何 NL→结构化输出的场景 | 模板定义格式可复用；`.tools` 执行器直接复用此引擎 |
 | `src/nl-perm/perm_engine.c` | 可配置的 L1-L4 权限判定引擎 | 任何需要操作分级的系统 | 规则文件格式 (`perm_rules.conf`) 可作为 Linux 安全组件的标准接口 |
 
 ### 9.2 新增 / 改变的项目级技术决策
