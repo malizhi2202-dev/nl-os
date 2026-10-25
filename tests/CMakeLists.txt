@@ -233,3 +233,11 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/benchmark_test.c)
     target_link_libraries(test_benchmark PRIVATE nlc cjson)
     add_test(NAME benchmark COMMAND test_benchmark)
 endif()
+
+# .tools 固化（T14）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/freeze_test.c)
+    add_executable(test_freeze unit/freeze_test.c)
+    target_include_directories(test_freeze PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_freeze PRIVATE nlc)
+    add_test(NAME freeze COMMAND test_freeze)
+endif()

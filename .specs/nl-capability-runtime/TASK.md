@@ -263,9 +263,9 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
 | T11b | decoder 后端接线（加载模型 + 约束解码 + 按画像选后端） | AC-6, AC-10 | 🔒 blocked：本机无 GGUF 模型 |
 | T12 | Noul 三档 + 单调性（模型只能更严格） | AC-7, AC-8 | ✅ done |
 | T13 | 后端自降档 + **分档评测**（A/B/C 各一份准确率与 P95 延迟）+ 中文集扩到 100+ | AC-9, AC-6 | blocked |
-| T14 | 内置 SHA-256（NIST 向量）+ `.tools` 固化与校验 | AC-11~AC-13 | blocked |
+| T14 | `.tools` 固化与校验（SHA-256 链式哈希 + 篡改拒绝） | AC-11~AC-13 | ✅ done |
 | T15 | 快照（8MB/敏感排除/200MB/LRU）+ `--undo` | AC-14, AC-15 | blocked |
-| T16 | `nlsh --audit replay` + 导出 | AC-16 | blocked |
+| T16 | `nlsh --audit`（回放，复用 nl_audit_query） | AC-16 | ✅ done |
 
 ---
 

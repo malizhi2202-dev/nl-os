@@ -4,6 +4,7 @@
 #include "nlc_api.h"
 #include "capability_registry.h"
 #include "capability_scan.h"
+#include "audit.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,21 +15,34 @@ static void sigint_handler(int sig) { (void)sig; g_running=0; }
 static void print_usage(void) {
     printf("nlsh - NL-Shell\n");
     printf("用法: nlsh [--dry-run] [--verbose] [--no-model] [--registry PATH]\n");
-    printf("           [--scan] [--self-test] [-c cmd]\n");
+    printf("           [--scan] [--self-test] [--audit [--since N] [--limit N]] [-c cmd]\n");
 }
 int main(int argc, char **argv) {
     int dry_run=0,verbose __attribute__((unused)) =0,no_model=0;
-    int do_scan=0, do_selftest=0;
+    int do_scan=0, do_selftest=0, do_audit=0;
+    long audit_since = 0;
+    int audit_limit = 20;
     const char *registry_path=NULL;
     char *cmd=NULL;
     for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
         else if(strcmp(argv[i],"--registry")==0&&i+1<argc)registry_path=argv[++i];
         else if(strcmp(argv[i],"--scan")==0)do_scan=1;
-        else if(strcmp(argv[i],"--self-test")==0)do_selftest=1; else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
+        else if(strcmp(argv[i],"--self-test")==0)do_selftest=1;
+        else if(strcmp(argv[i],"--audit")==0)do_audit=1;
+        else if(strcmp(argv[i],"--since")==0&&i+1<argc)audit_since=atol(argv[++i]);
+        else if(strcmp(argv[i],"--limit")==0&&i+1<argc)audit_limit=atoi(argv[++i]); else if(strcmp(argv[i],"--help")==0||strcmp(argv[i],"-h")==0){print_usage();return 0;} }
     signal(SIGINT,sigint_handler);
     nl_history_init(getenv("HOME")?strcat(strcpy(malloc(256),getenv("HOME")),"/.nlsh_history"):NULL);
 
     const char *reg_path = registry_path ? registry_path : nl_cap_default_path();
+
+    if (do_audit) {
+        static char buf[16384];
+        int n = nl_audit_query(audit_since, audit_limit, buf, sizeof(buf));
+        if (n < 0) { fprintf(stderr, "nlsh: 审计读取失败\n"); return 1; }
+        printf("%s\n", buf);
+        return 0;
+    }
 
     if (do_scan || do_selftest) {
         NlCapRegistry *reg = nl_cap_load(reg_path, NULL);

@@ -74,6 +74,7 @@ add_library(nlc SHARED
     src/libnlc/cip.c
     src/libnlc/sha256.c
     src/libnlc/decision.c
+    src/libnlc/freeze.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)
 target_link_libraries(nlc PUBLIC cjson Threads::Threads)
