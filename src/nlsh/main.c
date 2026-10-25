@@ -220,7 +220,8 @@ int main(int argc, char **argv) {
             fprintf(stderr,"ℹ️ 档位 %d：decoder 未启用（仅规则/向量粗筛）\n", tier);
         } else {
             const char *mp=nl_model_default_path(); if(!mp)mp="/usr/share/nl-os/model.gguf";
-            if(nl_init(mp)!=0) fprintf(stderr,"⚠️ 模型加载失败，降档到规则引擎\n");
+            /* 惰性：规则层能决定的句子不加载模型（省 2s CPU / 780MB） */
+            if(nl_init_lazy(mp)!=0) fprintf(stderr,"⚠️ 模型加载失败，降档到规则引擎\n");
         }
     }
 

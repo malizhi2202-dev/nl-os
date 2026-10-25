@@ -87,3 +87,8 @@
 | 2026-10-25 | `scripts/verify_segment2.sh` AC-8 用例 | 单候选时短路，阈值闸门测不到；原断言靠环境偶然通过 | 用例加 `NL_DECIDE_SOLO_DECODE=1` 强制解码 |
 | 2026-10-25 | `tests/unit/budget_test.c`（改扩写而非新建） | 仓库已有同名测试，新建会变成两份 | 直接扩写（ponytail 阶梯 2） |
 | 2026-10-25 | `src/nlsh/main.c` 快路径懒加载（T07） | 用户追问"快路径 ≤5ms 为啥不动"；实测满表 20–50ms、空表 0–10ms，耗时几乎全在注册表全量解析，而快路径不需要注册表 | 传统命令时不加载注册表；实测 30ms → 0–10ms，NL 路径不变 |
+
+### T11 · 模型惰性加载（用户反馈"占用 CPU 很大很快就满了"后追加）
+- **write_files**: `src/libnlc/nlc_api.c/.h`（`nl_init_lazy` / `ensure_model` / `nl_model_is_loaded`）、`src/nlsh/main.c`、`src/nl-run/main.c`、`scripts/verify_exec.sh`
+- **verify**: 规则可决定命令 RSS < 200MB 且 0.1–0.3s（改前 779MB / 3.5s）；规则未命中仍加载（RSS > 300MB）；模型缺失降档不阻塞。AC-14 5 条
+- **auto**: true

@@ -98,7 +98,7 @@ int main(int argc,char**argv){
             fprintf(stderr,"⚠️ 使用固化脚本（不经模型）\n");
         }else{
             const char *mp=nl_model_default_path();if(!mp)mp="/usr/share/nl-os/model.gguf";
-            if(nl_init(mp)!=0){fprintf(stderr,"模型加载失败\n");nl_script_free(s);return -1;}
+            if(nl_init_lazy(mp)!=0){fprintf(stderr,"模型加载失败\n");nl_script_free(s);return -1;}
         }
     }
     printf("执行 %s (%d 步):\n",fp,s->count);

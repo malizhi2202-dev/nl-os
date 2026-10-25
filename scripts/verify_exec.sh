@@ -210,6 +210,21 @@ chk "AC-11k 快路径删除可撤销" "[ -f pol_fast/k.txt ] && grep -q keep pol
 chk "AC-11k 审计标出破坏性快路径" "grep -q '\"reason\":\"fast-path-destructive\"' '$WORK/audit3.json'"
 chk "AC-11k 审计区分普通快路径" "grep -q '\"reason\":\"fast-path\"' '$WORK/audit3.json'"
 
+# ── AC-14 模型惰性加载：规则能决定的句子不加载模型（否则每次调用 +2s CPU / +780MB） ──
+echo "=== AC-14 模型惰性加载"
+rm -rf lazy_dir
+t=$(/usr/bin/time -f "rss=%M" "$NLSH" --yes -c '创建一个叫 lazy_dir 的文件夹' 2>&1 >/dev/null | tail -1)
+rss=$(printf '%s' "$t" | sed -n 's/.*rss=\([0-9]*\).*/\1/p')
+chk "AC-14 规则可决定：目录已创建" "[ -d lazy_dir ]"
+chk "AC-14 规则可决定：未加载模型（RSS ${rss:-?}KB < 200MB）" "[ -n '$rss' ] && [ '$rss' -lt 200000 ]"
+t=$(/usr/bin/time -f "rss=%M" "$NLSH" -c '显示当前工作目录' 2>&1 >/dev/null | tail -1)
+rss2=$(printf '%s' "$t" | sed -n 's/.*rss=\([0-9]*\).*/\1/p')
+chk "AC-14 规则未命中：真加载模型（RSS ${rss2:-?}KB > 300MB）" "[ -n '$rss2' ] && [ '$rss2' -gt 300000 ]"
+out=$(HOME="$WORK" XDG_DATA_HOME="$WORK/data" "$NLSH" --yes -c '创建一个叫 lazy_fb 的文件夹' 2>&1); rc=$?
+printf '%s\n' "$out" > "$WORK/lazyfb.txt"
+chk "AC-14 模型缺失仍走规则（退出码 0）" "[ $rc -eq 0 ]"
+chk "AC-14 模型缺失：降档提示且真的执行" "grep -q '降档到规则引擎' '$WORK/lazyfb.txt' && [ -d lazy_fb ]"
+
 echo
 echo "=== 结果：$pass 通过 / $fail 失败"
 rm -rf "$STATE" "$WORK"

@@ -82,6 +82,20 @@ $R --freeze d.tools && printf 'n\n' | $R d.tools; echo "allow-l2 删除退出码
 **预期**：①不提问；②五个目录都出现；③两个 `3` 且目录**没**出现；④`1`（与 3 可区分）；
 ⑤创建不问（0）、删除仍问（3，`test -d u_l2` 仍成立）。
 
+## 场景 6 · 开销按需（模型惰性加载）
+
+```bash
+N=/path/to/nl-os/build/nlsh
+
+# ① 规则能决定的说法：应该 0.1–0.3s、约 19MB，不该看见模型加载
+/usr/bin/time -f "elapsed=%e rss=%MKB" $N --yes -c '创建一个叫 u_cost 的文件夹'
+
+# ② 规则兜不住的说法：此时才加载模型（3–5s、约 780MB），属预期
+/usr/bin/time -f "elapsed=%e rss=%MKB" $N -c '显示当前工作目录'
+```
+**预期**：①`rss` 在 20MB 上下（改前是 780MB、耗时 3.5s）；②`rss` 约 780MB——说明加载发生在
+"真需要"的时候，而不是每次启动。
+
 ---
 
 ## 已知未达标项

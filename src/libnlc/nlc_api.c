@@ -9,13 +9,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static NlModel *g_model = NULL;
-static char g_error[256];
+static char g_model_path[512];   /* 惰性初始化记下的路径；空 = 未配置模型 */
+static char g_error[1024];
 
 /* ============================================================
  * 生命周期
  * ============================================================ */
+
+/* 真要解码时才加载：规则层能决定的句子不该付模型加载的代价 */
+static int ensure_model(void)
+{
+    if (g_model) return 0;
+    if (!g_model_path[0]) return -1;
+    g_model = nl_model_init(g_model_path);
+    if (!g_model) {
+        snprintf(g_error, sizeof(g_error), "nl_init: failed to load model '%s'", g_model_path);
+        /* 一次加载失败就不再重试：否则 REPL 里每条命令都要白等一次加载 */
+        fprintf(stderr, "⚠️ 模型加载失败，降档到规则引擎\n");
+        g_model_path[0] = '\0';
+        return -1;
+    }
+    g_error[0] = '\0';
+    return 0;
+}
 
 int nl_init(const char *model_path) {
     if (!model_path) {
@@ -31,12 +50,33 @@ int nl_init(const char *model_path) {
         snprintf(g_error, sizeof(g_error), "nl_init: failed to load model '%s'", model_path);
         return -1;
     }
+    snprintf(g_model_path, sizeof(g_model_path), "%s", model_path);
     g_error[0] = '\0';
     return 0;
 }
 
+int nl_init_lazy(const char *model_path) {
+    if (!model_path) {
+        snprintf(g_error, sizeof(g_error), "nl_init_lazy: model_path is NULL");
+        return -1;
+    }
+    if (g_model) { nl_model_free(g_model); g_model = NULL; }
+    /* 只做一次可读性检查（nanoseconds 级），真加载推迟到 ensure_model() */
+    if (access(model_path, R_OK) != 0) {
+        g_model_path[0] = '\0';
+        snprintf(g_error, sizeof(g_error), "nl_init_lazy: model not readable '%s'", model_path);
+        return -1;
+    }
+    snprintf(g_model_path, sizeof(g_model_path), "%s", model_path);
+    g_error[0] = '\0';
+    return 0;
+}
+
+int nl_model_is_loaded(void) { return g_model ? 1 : 0; }
+
 void nl_free(void) {
     if (g_model) { nl_model_free(g_model); g_model = NULL; }
+    g_model_path[0] = '\0';
 }
 
 const char *nl_get_last_error(void) { return g_error; }
@@ -110,10 +150,10 @@ int nl_parse(const char *input, NlParseResult *result) {
     }
     nl_rule_result_free(&rule_r);
 
-    /* ── Layer 3: 模型推理 ── */
-    if (!g_model) {
+    /* ── Layer 3: 模型推理（惰性：到这里才真正加载模型） ── */
+    if (ensure_model() != 0) {
         dbg_pos += snprintf(debug + dbg_pos, sizeof(debug) - dbg_pos,
-                            "[模型推理] 模型未加载，无法继续; ");
+                            "[模型推理] 模型未加载或加载失败，无法继续; ");
         snprintf(result->debug_info, sizeof(result->debug_info), "%s", debug);
         nl_sanitize_result_free(&sr);
         return -1;

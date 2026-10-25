@@ -38,6 +38,15 @@ typedef struct { int status; char *summary; } NlObserveResult;
 
 /* ── 生命周期 ── */
 int  nl_init(const char *model_path);
+/*
+ * 惰性初始化：只记录路径并检查可读性，**不加载模型**；等规则层未命中、真要用模型
+ * （四层管线 Layer 3）时才 nl_model_init。
+ * 动机：常见说法（`创建一个叫 X 的文件夹`）规则层就能决定，却为每次调用付 428MB gguf
+ * 的加载成本（实测 +2.1s CPU / 779MB RSS）——在 2 vCPU 机器上等于打满一核。
+ */
+int  nl_init_lazy(const char *model_path);
+/* 模型是否已真正载入内存（0 = 尚未加载或未配置） */
+int  nl_model_is_loaded(void);
 void nl_free(void);
 
 /* ── 核心解析（四层管线）── */

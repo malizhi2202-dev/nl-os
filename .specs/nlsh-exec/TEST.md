@@ -2,7 +2,7 @@
 
 - **Change ID**: `nlsh-exec`
 - **日期**: 2026-10-25
-- **结论**: 验收脚本 **76/76** 通过；`ctest` **31/31**（Debug+Release）；段 1/2/3 验收 12/12、18/18、16/16；`verify_all.sh` 0 失败
+- **结论**: 验收脚本 **81/81** 通过；`ctest` **31/31**（Debug+Release）；段 1/2/3 验收 12/12、18/18、16/16；`verify_all.sh` 0 失败
 
 ---
 
@@ -12,7 +12,7 @@
 |---|---|---|
 | 单元测试 | `ctest`（Debug, ASan/UBSan） | **31/31 passed**（新增 `exec`、`confirm`） |
 | 单元测试 | `ctest`（Release） | **31/31 passed** |
-| 本 change 验收 | `scripts/verify_exec.sh` | **76 通过 / 0 失败**（含 AC-11 统一确认门 40 条） |
+| 本 change 验收 | `scripts/verify_exec.sh` | **81 通过 / 0 失败**（含 AC-11 统一确认门 40 条、AC-14 惰性加载 5 条） |
 | 段 1 | `scripts/verify_segment1.sh` | pass=12 fail=0 |
 | 段 2 | `scripts/verify_segment2.sh` | 18 通过 / 0 失败（decoder 档） |
 | 段 3 | `scripts/verify_segment3.sh` | pass=16 fail=0 |
@@ -35,6 +35,7 @@
 | AC-11 确认策略统一（ADR-019） | `confirm_test`（4 组）+ `freeze_test`（策略头保留/防篡改）+ `verify_exec.sh` AC-11a~11k（40 条） | ✅ |
 | AC-12 本地安装可用 | 登录 shell `command -v nlsh` + 无 `NL_MODEL_PATH` 时模型自动发现 | ✅ |
 | AC-13 ARM64 交叉构建与运行 | 交叉构建 + `qemu-aarch64-static` 跑 scan/eval，数值与 x86_64 一致 | ✅（stub 模型） |
+| AC-14 模型惰性加载 | `verify_exec.sh` AC-14（5 条：规则命中不加载 / 规则未命中加载 / 模型缺失降档） | ✅ |
 
 ## 3. 证据（实跑输出摘录）
 
@@ -139,6 +140,19 @@ $ build/nl-run f.tools </dev/null        # → 仍然问一次 → 退出码 3�
 # @perm: allow-l2
 创建一个叫 l2f 的文件夹
 $ build/nl-run f.tools </dev/null        # → mkdir -p l2f ✅ 退出码 0
+```
+
+### AC-14（模型惰性加载：规则能决定就不付 428MB）
+
+```
+改前：nlsh -c '创建一个叫 cpu_dir 的文件夹'     3.57s  →  user 1.43s sys 0.71s  RSS 779MB
+改后：nlsh --yes -c '创建一个叫 lazy_1 的文件夹' 0.18s →  cpu 0.10s            RSS  19MB
+对照：nlsh --no-model --yes -c '创建一个叫 ...'   0.36s →  RSS 19MB
+
+PASS AC-14 规则可决定：未加载模型（RSS 19164KB < 200MB）
+PASS AC-14 规则未命中：真加载模型（RSS 786668KB > 300MB）
+PASS AC-14 模型缺失仍走规则（退出码 0）
+PASS AC-14 模型缺失：降档提示且真的执行
 ```
 
 ## 4. 评测集未回归

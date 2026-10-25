@@ -39,6 +39,12 @@ with open(reg, "w") as f:
 
 httpd = subprocess.Popen([sys.executable, "-m", "http.server", str(HTTP_PORT), "--directory", http_root],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+# 等 HTTP 端口真的可连：机器满载时进程起了但还没 bind，AC-8 会误报 connection refused
+for _ in range(100):
+    try:
+        _s = socket.create_connection(("127.0.0.1", HTTP_PORT), timeout=0.2); _s.close(); break
+    except OSError:
+        time.sleep(0.05)
 fake = os.path.join(ROOT, "tests/fixtures/fake_mcp_server.py")
 broker = subprocess.Popen([os.path.join(BUILD, "nlbroker"), "--socket", sock, "--registry", reg,
                            "--mcp-name", "fake", "--mcp-cmd", sys.executable, "--mcp-arg", fake],
@@ -166,14 +172,26 @@ try:
     check("AC-9 audit fields", bool(recs) and all(k in recs[0] for k in need), recs[:1])
     check("AC-9 no plaintext", "/etc/passwd" not in json.dumps(recs), "leak")
 
-    # T-FIX-03：invoke 限速（101 次同一秒内应被拒）
+    # T-FIX-03：invoke 限速（同一秒内 >100 次应被拒）。
+    # 注意：2 vCPU 满载时 IPC 往返可能慢到 120 次跨多个秒窗口——此时限速本就不会触发。
+    # 所以只有"单秒内真的打过 100 次却仍不拒"才算失败；打不满记 SKIP，不假装通过。
     limited = False
-    for i in range(120):
-        rr = call({"v":1,"id":"rl%d" % i,"op":"invoke","capability":"cli:echo","args":{"args":["x"]}})
+    per_sec = {}
+    t0 = time.time(); n = 0
+    while time.time() - t0 < 4.0 and not limited:
+        sec = int(time.time())
+        rr = call({"v":1,"id":"rl%d" % n,"op":"invoke","capability":"cli:echo","args":{"args":["x"]}}); n += 1
+        per_sec[sec] = per_sec.get(sec, 0) + 1
         if (not rr.get("ok")) and rr.get("error") == "E_POLICY_DENY":
             limited = True
-            break
-    check("T-FIX-03 invoke rate limited", limited, "no E_POLICY_DENY observed")
+    peak = max(per_sec.values()) if per_sec else 0
+    if limited:
+        check("T-FIX-03 invoke rate limited", True)
+    elif peak > 100:
+        check("T-FIX-03 invoke rate limited", False,
+              "单秒内 %d 次 invoke 仍未触发限速（限速可能失效）" % peak)
+    else:
+        print("SKIP T-FIX-03 (环境太慢：单秒最多 %d 次 invoke，未达限速阈值 100)" % peak)
 
     # AC-10 资源（Release 构建 + 512MB 地址空间限制）
     # 注意：这里必须构建**全部 target**。曾经只 make nlbroker，导致 snapshot.c 的
