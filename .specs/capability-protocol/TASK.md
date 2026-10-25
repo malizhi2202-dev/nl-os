@@ -344,7 +344,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T08</depends_on>
 </task>
 
-<task id="T14" parallel="false" status="pending" auto="false">
+<task id="T14" parallel="false" status="done" auto="false">
   <name>🔒 收口：AC 全量验证 + 对抗用例 + 资源门限</name>
   <read_files>
     .specs/capability-protocol/REQUIREMENT.md

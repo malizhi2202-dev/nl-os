@@ -8,8 +8,8 @@
 
 - **活跃 Change**: `capability-protocol`（已进入 DEV，T01 完成）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: DEV（capability-protocol；**T01–T13 完成**，只剩 T14 全量验证（auto=false 人审门）
-- **当前 Task**: `T14`（全量 AC 验证，**执行前需人审签核**）
+- **当前阶段**: TEST（capability-protocol；T01–T14 全部完成，AC-1~AC-10 全绿，进入 5-test）
+- **当前 Task**: 5-test（产出 `TEST.md` 五轮矩阵）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
   - 活跃 change → 先读 `@.specs/capability-protocol/TASK.md` + 本文件「流程欠账」段

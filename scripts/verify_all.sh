@@ -31,6 +31,7 @@ caps = [
  {"id":"cli:mystery","name":"mystery","path":"/bin/true","perm":"L1","source":"scan","trusted":True,"namespace":"cli"},
  {"id":"http:GET|http://127.0.0.1:%d/health" % HTTP_PORT,"name":"health","namespace":"http","perm":"L1","effect":"read","reversible":True,"source":"manual","trusted":True},
  {"id":"http:GET|https://example.com/x","name":"https","namespace":"http","perm":"L1","effect":"read","reversible":True,"source":"manual","trusted":True},
+ {"id":"dbus:org.freedesktop.DBus|ListNames","name":"ListNames","namespace":"dbus","perm":"L2","effect":"network","reversible":True,"source":"bus","trusted":True},
 ]
 with open(reg, "w") as f:
     f.write(json.dumps({"format_version":2,"scanner":"t14"}) + "\n")

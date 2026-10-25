@@ -116,7 +116,10 @@ int nl_audit_emit(const NlAuditRec *rec)
     (void)flock(fd, LOCK_EX);
     size_t len = strlen(line);
     ssize_t w = write(fd, line, len);
-    if (w == (ssize_t)len) (void)write(fd, "\n", 1);
+    if (w == (ssize_t)len) {
+        /* 换行写失败不影响主记录（已在同一 fd 上 flush） */
+        if (write(fd, "\n", 1) < 0) { /* ignore */ }
+    }
     (void)flock(fd, LOCK_UN);
     close(fd);
     free(line);
