@@ -26,5 +26,18 @@ make -j$(nproc)
 ```bash
 cmake .. -DBUILD_TESTING=ON
 make -j$(nproc)
-ctest
+ctest                      # 20 个测试，约 2s
+bash scripts/verify_all.sh # AC-1~AC-10 端到端（含 Release 构建与内存门限）
 ```
+
+## 构建产物
+
+`nlsh` / `nl-perm` / `nl-run` / **`nlbroker`** / `libnlc.so`
+
+## 平台支持状态
+
+| 平台 | 状态 |
+|---|---|
+| Linux x86_64 + glibc | ✅ 实测（全部测试与端到端） |
+| Linux ARM64 | ⚠️ **未验证**（本机无交叉编译链） |
+| musl / OpenWrt | ⚠️ **未验证**（同上） |

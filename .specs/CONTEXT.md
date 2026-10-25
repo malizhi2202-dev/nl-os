@@ -92,6 +92,8 @@ NL-OS 是一个**自然语言驱动的操作系统交互层**。目标是把「�
 - `[2026-10-25]` **CIP v1 定案**：五报文 / 两阶段 invoke-commit / `plan` 用 argv 数组不经 shell / `effect` 五类且缺省 delete / 威胁模型"模型不可信、系统用户可信"。`@.specs/adr/016-cip-protocol.md`
 - `[2026-10-25]` **broker 为独立进程 + fail-closed**；ticket 一次性、TTL 60s、绑定 args_hash、表上限 1024 + LRU。`@.specs/adr/017-broker-process.md`
 - `[2026-10-25]` **执行面用子进程桥**：不引 libdbus / libcurl / TLS；`http:` 仅 http://，https 走 `cli:curl`。`@.specs/adr/018-capability-adapters.md`
+- `[2026-10-25]` **平台支持状态**：x86_64 + glibc 已实测；ARM64 / musl 未验证（无交叉链）。ADR-015 的 A1/B/C 承诺属"未验证设计目标"，发布说明需标注。
+- `[2026-10-25]` **broker 三种运行形态**：`--socket`（CIP 服务端）、`--facade-mcp`（MCP 门面，仅 L2 以下）、`--scan-dbus`（扫描并写回注册表）。
 - `[2026-10-25]` **以 ADR 作为架构文档**：不单独维护 `ARCHITECTURE.md`，模块边界与协议契约由 ADR-001~018 承载；需要全景时再跑 `A-architect` 汇总。用户裁定。
 - `[2026-10-25]` **不做策略语言**（YAML/Rego/Cedar），策略用编译期表 + 运行期规则——解释器在端侧是纯负担。
 - `[2026-10-25]` **能力注册表格式 v1 冻结**：JSON Lines + `format_version` + `flock` + `rename` 原子写 + 权限 0600。`@.specs/adr/012-capability-registry.md`
