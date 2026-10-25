@@ -256,10 +256,10 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
 
 | id | 名称 | 对应 AC | 状态 |
 |---|---|---|---|
-| T10 | 候选收缩（规则/词典 → top-K=8，统计粗筛命中率） | AC-6 前置 | blocked（待 T08 冻结） |
-| T11 | GBNF Choice + 语法缓存（先实测构造开销 ≤5ms） | AC-6, AC-10 | blocked |
+| T10 | 候选收缩：**embedding 语义粗筛**（A 档主力）+ 规则兜底 → top-K=8，统计粗筛命中率/漏救率 | AC-6 前置 | blocked（待 T08 冻结） |
+| T11 | **decoder 后端**（B/C 档）：GBNF Choice + 语法缓存 + 宿主画像选后端（ADR-015） | AC-6, AC-10 | blocked |
 | T12 | Noul 三档 + 单调性（模型只能更严格） | AC-7, AC-8 | blocked |
-| T13 | 决策层降级 + 中文评测集扩充到 100+ | AC-9, AC-6 | blocked |
+| T13 | 后端自降档 + **分档评测**（A/B/C 各一份准确率与 P95 延迟）+ 中文集扩到 100+ | AC-9, AC-6 | blocked |
 | T14 | 内置 SHA-256（NIST 向量）+ `.tools` 固化与校验 | AC-11~AC-13 | blocked |
 | T15 | 快照（8MB/敏感排除/200MB/LRU）+ `--undo` | AC-14, AC-15 | blocked |
 | T16 | `nlsh --audit replay` + 导出 | AC-16 | blocked |
