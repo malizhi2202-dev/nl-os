@@ -108,13 +108,13 @@ static void test_roundtrip(void)
 /* ---------------- case 2 ---------------- */
 static void test_newer_version_rejected(void)
 {
-    TEST("format_version 2 rejected");
+    TEST("format_version 3 rejected");
     char path[300];
     path_for(2, path, sizeof(path));
 
     FILE *f = fopen(path, "w");
     ASSERT(f != NULL, "open for write failed");
-    fputs("{\"format_version\":2,\"scanner\":\"future\"}\n", f);
+    fputs("{\"format_version\":3,\"scanner\":\"future\"}\n", f);
     fputs("{\"id\":\"x\",\"path\":\"/bin/x\",\"perm\":\"L1\",\"source\":\"scan\",\"trusted\":true}\n", f);
     fclose(f);
 
@@ -211,6 +211,84 @@ static void test_bad_line_skipped(void)
     PASS();
 }
 
+static void test_v2_explicit_effect(void)
+{
+    TEST("v2 explicit effect survives roundtrip");
+    char path[300];
+    path_for(6, path, sizeof(path));
+
+    NlCapRegistry *r = nl_cap_create();
+    NlCapability c;
+    make_cap(&c, "cli:ls", "/usr/bin/ls", 1);
+    c.effect = NL_CAP_EFFECT_READ;
+    c.reversible = 1;
+    snprintf(c.namespace, sizeof(c.namespace), "cli");
+    ASSERT(nl_cap_add(r, &c) == NL_CAP_OK, "add failed");
+    ASSERT(nl_cap_save_atomic(r, path) == NL_CAP_OK, "save failed");
+    nl_cap_free(r);
+
+    NlCapLoadErr err = NL_CAP_ERR_IO;
+    NlCapRegistry *l = nl_cap_load(path, &err);
+    ASSERT(l != NULL, "load failed");
+    ASSERT(err == NL_CAP_OK, "err should be ok");
+    const NlCapability *x = nl_cap_find(l, "cli:ls");
+    ASSERT(x != NULL, "cap missing");
+    ASSERT(x->effect == NL_CAP_EFFECT_READ, "effect must be read");
+    ASSERT(x->reversible == 1, "reversible must be 1");
+    ASSERT(x->effect_defaulted == 0, "explicit effect must not be flagged defaulted");
+    nl_cap_free(l);
+    PASS();
+}
+
+static void test_v1_file_defaults(void)
+{
+    TEST("v1 file: effect=delete + namespace inferred");
+    char path[300];
+    path_for(7, path, sizeof(path));
+
+    FILE *f = fopen(path, "w");
+    ASSERT(f != NULL, "open for write failed");
+    fputs("{\"format_version\":1,\"scanner\":\"old\"}\n", f);
+    fputs("{\"id\":\"dbus:org.x|M\",\"path\":\"/x\",\"perm\":\"L2\","
+          "\"source\":\"scan\",\"trusted\":true}\n", f);
+    fclose(f);
+
+    NlCapLoadErr err = NL_CAP_ERR_IO;
+    NlCapRegistry *l = nl_cap_load(path, &err);
+    ASSERT(l != NULL, "load failed");
+    const NlCapability *x = nl_cap_find(l, "dbus:org.x|M");
+    ASSERT(x != NULL, "cap missing");
+    ASSERT(x->effect == NL_CAP_EFFECT_DELETE, "v1 effect must default to delete");
+    ASSERT(x->effect_defaulted == 1, "must be flagged as defaulted");
+    ASSERT(strcmp(x->namespace, "dbus") == 0, "namespace must be inferred from id");
+    nl_cap_free(l);
+    PASS();
+}
+
+static void test_invalid_effect_falls_back(void)
+{
+    TEST("invalid effect falls back to delete");
+    char path[300];
+    path_for(8, path, sizeof(path));
+
+    FILE *f = fopen(path, "w");
+    ASSERT(f != NULL, "open for write failed");
+    fputs("{\"format_version\":2}\n", f);
+    fputs("{\"id\":\"cli:x\",\"path\":\"/x\",\"perm\":\"L1\",\"source\":\"scan\","
+          "\"trusted\":true,\"effect\":\"bogus\"}\n", f);
+    fclose(f);
+
+    NlCapLoadErr err = NL_CAP_ERR_IO;
+    NlCapRegistry *l = nl_cap_load(path, &err);
+    ASSERT(l != NULL, "load failed");
+    const NlCapability *x = nl_cap_find(l, "cli:x");
+    ASSERT(x != NULL, "cap missing");
+    ASSERT(x->effect == NL_CAP_EFFECT_DELETE, "invalid effect must fall back to delete");
+    ASSERT(x->effect_defaulted == 1, "must be flagged as defaulted");
+    nl_cap_free(l);
+    PASS();
+}
+
 int main(void)
 {
     char tmpl[] = "/tmp/nlcap-registry-XXXXXX";
@@ -227,6 +305,9 @@ int main(void)
     test_lock_blocks_concurrent_save();
     test_file_mode_0600();
     test_bad_line_skipped();
+    test_v2_explicit_effect();
+    test_v1_file_defaults();
+    test_invalid_effect_falls_back();
 
     printf("\n%d/%d passed, %d failed\n", tests_passed, tests_run, tests_failed);
     return tests_failed == 0 ? 0 : 1;

@@ -8,8 +8,8 @@
 
 - **活跃 Change**: `capability-protocol`（已进入 DEV，T01 完成）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: DEV（capability-protocol；T01/T02 完成，下一任务 T03）
-- **当前 Task**: `T03`（注册表 v2：namespace/effect/reversible，兼容读 v1）
+- **当前阶段**: DEV（capability-protocol；T01–T03 完成，下一任务 T04）
+- **当前 Task**: `T04`（裁决器：effect 从严 + 权限分级 + 保护路径）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
   - 活跃 change → 先读 `@.specs/capability-protocol/TASK.md` + 本文件「流程欠账」段

@@ -73,6 +73,43 @@ static void parent_dir(const char *path, char *out, size_t n)
     else snprintf(out, n, ".");
 }
 
+const char *nl_cap_effect_str(NlCapEffect e)
+{
+    switch (e) {
+    case NL_CAP_EFFECT_READ:      return "read";
+    case NL_CAP_EFFECT_WRITE:     return "write";
+    case NL_CAP_EFFECT_DELETE:    return "delete";
+    case NL_CAP_EFFECT_PRIVILEGE: return "privilege";
+    case NL_CAP_EFFECT_NETWORK:   return "network";
+    case NL_CAP_EFFECT_UNSET:
+    default:                      return "delete";   /* 缺省从严 */
+    }
+}
+
+NlCapEffect nl_cap_effect_from_str(const char *s)
+{
+    if (!s) return NL_CAP_EFFECT_UNSET;
+    if (strcmp(s, "read") == 0)      return NL_CAP_EFFECT_READ;
+    if (strcmp(s, "write") == 0)     return NL_CAP_EFFECT_WRITE;
+    if (strcmp(s, "delete") == 0)    return NL_CAP_EFFECT_DELETE;
+    if (strcmp(s, "privilege") == 0) return NL_CAP_EFFECT_PRIVILEGE;
+    if (strcmp(s, "network") == 0)   return NL_CAP_EFFECT_NETWORK;
+    return NL_CAP_EFFECT_UNSET;
+}
+
+/* 从 id 前缀推断命名空间；无前缀按 cli */
+static void cap_infer_namespace(const char *id, char *out, size_t cap)
+{
+    const char *colon = id ? strchr(id, ':') : NULL;
+    if (colon && colon != id && (size_t)(colon - id) < cap) {
+        size_t n = (size_t)(colon - id);
+        memcpy(out, id, n);
+        out[n] = '\0';
+        return;
+    }
+    snprintf(out, cap, "%s", "cli");
+}
+
 static const char *perm_to_str(int p)
 {
     switch (p) {
@@ -184,6 +221,30 @@ static int parse_cap_line(const char *line, NlCapability *out)
 
     cJSON *ino = cJSON_GetObjectItem(doc.root, "inode");
     if (cJSON_IsNumber(ino)) out->inode = (unsigned long)cJSON_GetNumberValue(ino);
+
+    /* v2 字段；v1 文件里缺失 → 走缺省从严 */
+    {
+        const char *eff = NULL;
+        int rev = 0;
+        if (nl_json_get_string(doc.root, "effect", &eff) == 0 && eff) {
+            out->effect = nl_cap_effect_from_str(eff);
+            if (out->effect == NL_CAP_EFFECT_UNSET) {
+                out->effect = NL_CAP_EFFECT_DELETE;
+                out->effect_defaulted = 1;
+            }
+        } else {
+            out->effect = NL_CAP_EFFECT_DELETE;
+            out->effect_defaulted = 1;
+        }
+        if (nl_json_get_bool(doc.root, "reversible", &rev) == 0)
+            out->reversible = rev ? 1 : 0;
+
+        const char *ns = NULL;
+        if (nl_json_get_string(doc.root, "namespace", &ns) == 0 && ns && *ns)
+            snprintf(out->namespace, sizeof(out->namespace), "%.15s", ns);
+        else
+            cap_infer_namespace(out->id, out->namespace, sizeof(out->namespace));
+    }
 
     cJSON *slots = cJSON_GetObjectItem(doc.root, "slots");
     if (cJSON_IsArray(slots)) {
@@ -339,6 +400,11 @@ int nl_cap_save_atomic(NlCapRegistry *r, const char *path)
                 cJSON_AddItemToArray(slots, cJSON_CreateString(c->slots[k]));
             nl_json_add_item(o, "slots", slots);
         }
+        nl_json_add_string(o, "namespace", c->namespace[0] ? c->namespace : "cli");
+        /* UNSET 不写字段 → 读回时按 delete + effect_defaulted 处理，信息不丢 */
+        if (c->effect != NL_CAP_EFFECT_UNSET)
+            nl_json_add_string(o, "effect", nl_cap_effect_str(c->effect));
+        nl_json_add_bool(o, "reversible", c->reversible);
         nl_json_add_string(o, "source", c->source ? c->source : "scan");
         nl_json_add_bool(o, "trusted", c->trusted);
         if (write_json_line(fd, o) != 0) rc = NL_CAP_ERR_IO;
@@ -395,6 +461,13 @@ int nl_cap_add(NlCapRegistry *r, const NlCapability *c)
     d->kind = c->kind;
     d->perm_level = (c->perm_level >= 1 && c->perm_level <= 4) ? c->perm_level : 4;
     d->trusted = c->trusted ? 1 : 0;
+    d->effect = c->effect;
+    d->reversible = c->reversible ? 1 : 0;
+    d->effect_defaulted = c->effect_defaulted ? 1 : 0;
+    if (c->namespace[0])
+        snprintf(d->namespace, sizeof(d->namespace), "%.15s", c->namespace);
+    else
+        cap_infer_namespace(d->id, d->namespace, sizeof(d->namespace));
     d->slot_count = 0;
     for (int i = 0; i < c->slot_count && i < NL_CAP_MAX_SLOTS; i++)
         if (c->slots[i]) d->slots[d->slot_count++] = dup_or_null(c->slots[i]);

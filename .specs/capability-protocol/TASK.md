@@ -80,7 +80,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T01</depends_on>
 </task>
 
-<task id="T03" parallel="false" status="pending" auto="true">
+<task id="T03" parallel="false" status="done" auto="true">
   <name>注册表 v2：namespace / effect / reversible（兼容读 v1）</name>
   <read_files>
     src/libnlc/capability_registry.c
@@ -355,6 +355,11 @@ W5 HTTP+收口    T13[P] → T14                  │
 ```
 
 ---
+
+## 边界补充（Task 门后追加）
+
+为使每个任务可独立 verify，`src/nlbroker/*` 与 `tests/unit/*` 的新增任务**允许修改** `CMakeLists.txt`（接入 target）
+与 `tests/CMakeLists.txt`（注册测试）。除此之外仍严格按各任务 `write_files` 执行。
 
 ## AC 覆盖矩阵
 
