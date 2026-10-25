@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* 词典命中一次就是 8，低于它等于没认出任何东西 */
+#define NL_DECISION_MIN_SCORE 8
+
 /* 有合法域名时的偏置分：高于任何"提示词累加"（单个工具最多累到 30 左右），
  * 低于规则命中的 +50。它表达的是**判别性证据**：句子里出现一个合法域名，
  * 就是在问"这个名字指向哪"，比「IP」这种软词强得多（「帮我查 example.org 的 IP」
@@ -40,6 +43,9 @@ static const NlDecideHint HINTS[] = {
     { "目录里有什么", "ls", 10 },{ "文件夹里有什么", "ls", 10 },
     { "有什么东西", "ls", 10 }, { "文件", "ls", 6 },
     { "有啥", "ls", 10 },      { "文件清单", "ls", 10 },  { "清单", "ls", 8 },
+    /* 「里面/有什么」是 ls 的内容标记；带路径时它们决定的是"看这个目录" */
+    { "里面", "ls", 8 },       { "有什么", "ls", 8 },     { "里有什么", "ls", 10 },
+    { "东西", "ls", 8 },
     { "工作目录", "pwd", 10 },  { "当前路径", "pwd", 10 }, { "所在目录", "pwd", 10 },
     { "在哪个目录", "pwd", 10 },{ "工作路径", "pwd", 10 }, { "现在的位置", "pwd", 10 },
     { "我在哪", "pwd", 10 },    { "什么地方", "pwd", 10 },
@@ -51,6 +57,9 @@ static const NlDecideHint HINTS[] = {
     { "路径", "pwd", 10 },       { "打印", "pwd", 10 },
     /* ── 文件内容 ── */
     { "查看", "cat", 6 },       { "内容", "cat", 8 },      { "读取", "cat", 8 },
+    /* 「看看/瞧瞧」是"读"的泛动词；权重 8 让它单独够门槛（配合句中的路径），
+     * 但任何实体名词（网卡/进程/服务…）都比它高，不会被它抢走。 */
+    { "看看", "cat", 8 },       { "瞧瞧", "cat", 8 },      { "看一下", "cat", 8 },
     { "创建目录", "mkdir", 8 }, { "文件夹", "mkdir", 8 },  { "新建目录", "mkdir", 8 },
     { "创建文件", "touch", 8 }, { "空文件", "touch", 10 },
     { "删除", "rm", 8 },        { "删掉", "rm", 8 },
@@ -85,9 +94,12 @@ static const NlDecideHint HINTS[] = {
     { "端口", "lsof", 10 },     { "监听", "lsof", 10 },    { "网络连接", "lsof", 10 },
     { "连接", "lsof", 8 },      { "开放", "lsof", 8 },
     /* ── 服务（systemctl 只读形态，ADR-024 续）── */
-    { "服务", "systemctl", 10, "器" },   /* 服务器 ≠ 服务 */
-    { "系统服务", "systemctl", 10 },
-    { "开了哪些服务", "systemctl", 10 },
+    /* 「服务」是**实体名词**，权重必须高于「在跑/跑着」这类泛动词：
+     * 「现在跑着哪些服务」曾因 跑着(8)+在跑(8)=16 压过 服务(10) 而答成 ps（列进程）。
+     * 用户问的是服务，进程只是描述方式 —— 实体名词才是"这句话在问什么"。 */
+    { "服务", "systemctl", 20, "器" },   /* 服务器 ≠ 服务 */
+    { "系统服务", "systemctl", 20 },
+    { "开了哪些服务", "systemctl", 20 },
     /* ── 网卡 / 域名解析（ADR-024）
      * 这一层认的是"这句话在问哪一类东西"，不是"这句话怎么写"：
      * 出现网卡/接口/地址/连通 → ip；出现域名/解析/dns/指向 → dig。
@@ -353,7 +365,10 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
             free(dom);
         }
     }
-    /* 组合判断：容器名词 × 标记词（见本文顶部说明） */
+    /* 组合判断：容器名词 × 标记词（见本文顶部说明）。
+     * 「在哪/有什么」这类**标记词**永远参与（它们是结构信息，不是词典能覆盖的）；
+     * 只有"光一个目录名词就默认 ls"那一条要谨慎：它是纯兜底，词典已经答了就别插嘴
+     * （否则「显示当前工作目录」会变成 pwd(10) vs 目录→ls(10) 的平局被送去问模型）。 */
     {
         static const char *const DIR_NOUNS[] = { "目录", NULL };
         static const char *const LOC_NOUNS[] = { "路径", "位置", NULL };
@@ -385,8 +400,10 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
             offer(out, "cli:pwd", NL_DECISION_MARKER_BIAS);
         if (dir_contents)
             offer(out, "cli:ls", NL_DECISION_MARKER_BIAS);
-        /* 光一个容器名词（这个目录 / 工作目录 / 所在文件夹）默认就是"看看这个目录" */
-        if (has_dir && !dir_contents && !dir_identity && !purpose)
+        /* 光一个容器名词（这个目录 / 工作目录 / 所在文件夹）默认就是"看看这个目录"；
+         * 词典已经认出东西（≥ 门槛）时不再用这条兜底。 */
+        int dict_answered = (out->count > 0 && out->items[0].score >= NL_DECISION_MIN_SCORE);
+        if (has_dir && !dir_contents && !dir_identity && !purpose && !dict_answered)
             offer(out, "cli:ls", NL_DECISION_MARKER_BIAS - 2);
     }
 

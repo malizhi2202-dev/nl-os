@@ -125,9 +125,13 @@ static char *resolve_path(const char *path) {
 static int check_whitelist(const char *normalized) {
     if (!normalized) return 0;
     for (int i = 0; WHITELIST[i]; i++) {
-        if (strncmp(normalized, WHITELIST[i], strlen(WHITELIST[i])) == 0) {
+        size_t wl = strlen(WHITELIST[i]);      /* 表里每项都以 '/' 结尾，如 "/tmp/" */
+        if (strncmp(normalized, WHITELIST[i], wl) == 0) return 1;
+        /* 白名单目录**本身**也要允许（`/tmp`、`/home`）：
+         * 只比 "/tmp/" 会把 `cp a.txt /tmp` 判成"不在白名单"而拒绝。 */
+        if (wl > 1 && strncmp(normalized, WHITELIST[i], wl - 1) == 0 &&
+            (normalized[wl - 1] == '\0' || normalized[wl - 1] == '/'))
             return 1;
-        }
     }
     return 0;
 }
@@ -261,6 +265,47 @@ int nl_domain_check(const char *domain)
     for (const char *p = tld_start; *p; p++)
         if (!isalpha((unsigned char)*p)) return -1;
 
+    return 0;
+}
+
+/* ============================================================
+ * 服务名校验（ADR-024 续）
+ *
+ * `systemctl status <name>` 的 name 是拼进命令的自由文本，必须按形状收紧：
+ * 只允许 systemd unit 名里真实存在的字符，且不能以 '-' 开头
+ * （否则 `systemctl status -f` 之类的选项注入会绕开"只读形态"）。
+ * ============================================================ */
+int nl_service_name_check(const char *name)
+{
+    if (!name || !*name) return -1;
+    size_t len = strlen(name);
+    if (len > 256) return -1;
+    if (name[0] == '-') return -1;
+
+    int has_alnum = 0;
+    for (const char *p = name; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (isalnum(c)) { has_alnum = 1; continue; }
+        if (c == '@' || c == '.' || c == '_' || c == ':' || c == '-') continue;
+        return -1;
+    }
+    if (!has_alnum) return -1;   /* "@@@" 这种不是 unit 名 */
+    return 0;
+}
+
+int nl_tld_is_common(const char *domain)
+{
+    static const char *const TLDS[] = {
+        "com", "cn", "net", "org", "io", "edu", "gov", "info", "biz", "me",
+        "co", "top", "xyz", "dev", "app", "ai", "cc", "tv", "cloud", "site",
+        "online", "tech", "uk", "jp", "de", "fr", "ru", "kr", "hk", "tw",
+        "sg", "us", "eu", "in", "br", "au", "ca", NULL
+    };
+    if (!domain) return 0;
+    const char *dot = strrchr(domain, '.');
+    if (!dot || !dot[1]) return 0;
+    for (int i = 0; TLDS[i]; i++)
+        if (strcasecmp(dot + 1, TLDS[i]) == 0) return 1;
     return 0;
 }
 

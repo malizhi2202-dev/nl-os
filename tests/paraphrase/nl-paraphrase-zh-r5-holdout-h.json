@@ -1,0 +1,55 @@
+{
+  "_comment": [
+    "留出集 H（ADR-024 第八轮）：动词 + 粘连文件名的说法（用户报的「创建test.txt」「查看xxx.md」）。",
+    "写完直接跑、不调参；跑完即作废。也含反向验收：没有文件名的空话必须拒绝。"
+  ],
+  "format_version": 1,
+  "clusters": [
+    {
+      "cap": "create-file-H",
+      "expect": "touch",
+      "desc": "创建/新建 + 粘连文件名",
+      "utterances": [
+        "创建hello.py",
+        "新建data.csv",
+        "创建report.md",
+        "新建notes.txt",
+        "创建app.conf",
+        "建立一个test.json"
+      ]
+    },
+    {
+      "cap": "view-file-H",
+      "expect": "cat",
+      "desc": "查看/打开/读 + 粘连文件名",
+      "utterances": [
+        "查看index.html",
+        "打开settings.json",
+        "查看package.json",
+        "读取build.log",
+        "查看main.rs",
+        "看一眼config.yaml"
+      ]
+    },
+    {
+      "cap": "delete-file-H",
+      "expect": "rm",
+      "desc": "删除 + 粘连文件名",
+      "utterances": [
+        "删除temp.log",
+        "删掉draft.md",
+        "删除cache.bin"
+      ]
+    },
+    {
+      "cap": "empty-refuse-H",
+      "expect": "__refuse__",
+      "desc": "没有具体对象的空话：拒绝（「查看进程」是正经请求 → ps，不在这里）",
+      "utterances": [
+        "创建目录",
+        "创建文件夹",
+        "查看内容"
+      ]
+    }
+  ]
+}

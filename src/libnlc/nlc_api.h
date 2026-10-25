@@ -26,6 +26,9 @@ typedef struct {
     NlSlot        slots[NL_MAX_SLOTS];
     int           slot_count;
     int           needs_confirm;
+    /* 1 = 命令是受限管道（只用 '|' 连接；每段已校验为只读能力）。
+     * 执行时必须走 nl_exec_execute_pipeline()，不能用普通的单命令执行器。 */
+    int           is_pipeline;
     char         *normalized_paths[NL_MAX_PATHS];
     int           path_count;
     char          debug_info[512];
@@ -52,6 +55,13 @@ void nl_free(void);
 
 /* ── 核心解析（四层管线）── */
 int  nl_parse(const char *input, NlParseResult *result);
+
+struct NlCapRegistry;   /* 前向声明（capability_registry.h 里定义） */
+
+/* 注入本机能力注册表（借用，不接管所有权）：NL 解析的第三层要用它做
+ * 候选收缩 + 受约束选择（ADR-024 续）。不设置则跳过该层。 */
+void nl_set_registry(const struct NlCapRegistry *reg);
+const struct NlCapRegistry *nl_get_registry(void);
 /*
  * 只跑"安全网关 + 规则引擎 + 模板填充"，**不碰模型**。
  * 返回 1 = 规则层已决定（*result 已填好，调用方负责 free）；

@@ -27,7 +27,7 @@ int nl_exec_has_metachars(const char *cmd)
  * 注意：这道闸门只管"NL 生成的命令"（nl_exec_execute 这条路径）。
  * 用户在 shell 里手打 `ip link set ...` 属于原始命令快路径，不归这里管。
  * ============================================================ */
-typedef enum { FORM_EXACT = 0, FORM_DOMAIN_ARG = 1 } NlFormKind;
+typedef enum { FORM_EXACT = 0, FORM_DOMAIN_ARG = 1, FORM_SERVICE_ARG = 2 } NlFormKind;
 
 static const struct {
     const char *argv0;
@@ -35,12 +35,25 @@ static const struct {
     NlFormKind  kind;
 } RESTRICTED_FORMS[] = {
     { "ip",        "ip -br addr", FORM_EXACT      },
+    { "ip",        "ip route",    FORM_EXACT      },  /* 网关/路由表：只读 */
     { "dig",       "dig +short",  FORM_DOMAIN_ARG },
-    /* systemctl 在权限表里是 L2（能 stop/restart/enable）。只放行服务列表这一个
-     * 只读形态，别的形态一律拒绝 —— 这样"服务列表"才敢按 L1 无人值守执行。 */
+    /* systemctl 在权限表里是 L2（能 stop/restart/enable），只放行两个只读形态 */
     { "systemctl", "systemctl list-units --type=service --no-pager", FORM_EXACT },
+    { "systemctl", "systemctl status", FORM_SERVICE_ARG },
     { NULL,  NULL,          FORM_EXACT      }
 };
+
+/* 前缀 + 恰好一个按形状校验的参数 */
+static int form_arg_ok(const char *cmd, const char *form, int service)
+{
+    size_t flen = strlen(form);
+    if (strncmp(cmd, form, flen) != 0 || cmd[flen] != ' ') return 0;
+    const char *arg = cmd + flen + 1;
+    if (*arg == '\0') return 0;
+    for (const char *p = arg; *p; p++)
+        if (*p == ' ' || *p == '\t') return 0;      /* 只允许一个参数 */
+    return service ? (nl_service_name_check(arg) == 0) : (nl_domain_check(arg) == 0);
+}
 
 int nl_exec_form_allowed(const char *cmd)
 {
@@ -54,28 +67,21 @@ int nl_exec_form_allowed(const char *cmd)
     }
     argv0[i] = '\0';
 
+    int restricted = 0;
     for (int k = 0; RESTRICTED_FORMS[k].argv0; k++) {
         if (strcmp(argv0, RESTRICTED_FORMS[k].argv0) != 0) continue;
+        restricted = 1;
 
         const char *form = RESTRICTED_FORMS[k].form;
-        size_t flen = strlen(form);
-
-        /* 形态匹配刻意做成两种、不做宽松前缀：
-         *   EXACT      —— 整条必须一模一样。`ip` 必须走这条：`ip -br addr add …`
-         *                 这种"前缀对、后面改配置"的命令只有全串比对才拦得住。
-         *   DOMAIN_ARG —— 固定前缀 + 一个参数，参数必须过 nl_domain_check：
-         *                 `dig +short -f /etc/passwd` 这类"选项当域名"的注入由域名校验拦。 */
-        if (RESTRICTED_FORMS[k].kind == FORM_EXACT)
-            return strcmp(cmd, form) == 0 ? 1 : 0;
-
-        if (strncmp(cmd, form, flen) != 0 || cmd[flen] != ' ') return 0;
-        const char *arg = cmd + flen + 1;
-        if (*arg == '\0') return 0;
-        for (const char *p = arg; *p; p++)
-            if (*p == ' ' || *p == '\t') return 0;      /* 只允许一个参数 */
-        return nl_domain_check(arg) == 0 ? 1 : 0;
+        if (RESTRICTED_FORMS[k].kind == FORM_EXACT) {
+            if (strcmp(cmd, form) == 0) return 1;
+        } else if (RESTRICTED_FORMS[k].kind == FORM_DOMAIN_ARG) {
+            if (form_arg_ok(cmd, form, 0)) return 1;
+        } else {
+            if (form_arg_ok(cmd, form, 1)) return 1;
+        }
     }
-    return 1;   /* 未受控的二进制：沿用原有的权限分级 */
+    return restricted ? 0 : 1;   /* 受控二进制：登记形态之外一律拒绝 */
 }
 
 int nl_exec_execute(const char *cmd, int timeout_ms)
@@ -114,6 +120,63 @@ int nl_exec_execute(const char *cmd, int timeout_ms)
     }
     if (!WIFEXITED(status)) return -1;
     return WEXITSTATUS(status);
+}
+
+/* 受限管道执行：只用 '|' 分段，每段 fork 后 execvp，中间用 pipe 连接。
+ * 不经 shell —— 所以 `$()`、反引号、重定向、&& 全都不存在。 */
+int nl_exec_execute_pipeline(const char *cmd, int timeout_ms)
+{
+    if (!cmd || !*cmd) return -1;
+    if (!strchr(cmd, '|')) return nl_exec_execute(cmd, timeout_ms);
+    (void)timeout_ms;
+
+    char buf[2048];
+    snprintf(buf, sizeof(buf), "%s", cmd);
+
+    char *stages[4];
+    int ns = 0;
+    char *save = NULL;
+    for (char *t = strtok_r(buf, "|", &save); t && ns < 4; t = strtok_r(NULL, "|", &save)) {
+        while (*t == ' ' || *t == '\t') t++;
+        size_t l = strlen(t);
+        while (l > 0 && (t[l-1] == ' ' || t[l-1] == '\t')) t[--l] = '\0';
+        if (!*t) return -1;
+        stages[ns++] = t;
+    }
+    if (ns < 2) return nl_exec_execute(cmd, timeout_ms);
+
+    pid_t pids[4];
+    int prev = -1;
+    for (int i = 0; i < ns; i++) {
+        int fds[2] = { -1, -1 };
+        if (i < ns - 1 && pipe(fds) != 0) return -1;
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            if (prev >= 0) { dup2(prev, 0); close(prev); }
+            if (i < ns - 1) { dup2(fds[1], 1); close(fds[0]); close(fds[1]); }
+            char *argv[64];
+            int n = 0;
+            for (char *tk = strtok(stages[i], " \t"); tk && n < 63; tk = strtok(NULL, " \t"))
+                argv[n++] = tk;
+            argv[n] = NULL;
+            if (n == 0) _exit(127);
+            execvp(argv[0], argv);
+            _exit(127);
+        }
+        if (pid < 0) return -1;
+        pids[i] = pid;
+        if (prev >= 0) close(prev);
+        if (i < ns - 1) { close(fds[1]); prev = fds[0]; }
+    }
+
+    int rc = 0;
+    for (int i = 0; i < ns; i++) {
+        int status = 0;
+        if (waitpid(pids[i], &status, 0) == pids[i] && i == ns - 1)
+            rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+    return rc;
 }
 
 int nl_exec_collect_paths(const char *cmd, char paths[][NL_EXEC_PATH_MAX], int max)

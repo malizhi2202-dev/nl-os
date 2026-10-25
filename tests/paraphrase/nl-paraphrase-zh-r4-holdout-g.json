@@ -1,0 +1,83 @@
+{
+  "_comment": [
+    "留出集 G（ADR-024 第七轮）：把字句双参数、服务状态、网关/DNS、带路径的只读询问。",
+    "写完直接跑、不调参；跑完即作废。"
+  ],
+  "format_version": 1,
+  "clusters": [
+    {
+      "cap": "ba-move-G",
+      "expect": "mv",
+      "desc": "把 A 挪到/移到 B",
+      "utterances": [
+        "把 report.pdf 挪到 /tmp",
+        "把 old 目录移到 backup",
+        "把这个压缩包搬到 /opt",
+        "把 backup.tar 移到 /mnt",
+        "移动 dump.sql 到 /tmp"
+      ]
+    },
+    {
+      "cap": "ba-copy-G",
+      "expect": "cp",
+      "desc": "把 A 复制/拷贝到 B",
+      "utterances": [
+        "把 config.json 复制到 /tmp",
+        "把 logs 目录拷贝到 /tmp",
+        "复制 index.html 到 /opt/site",
+        "拷贝 notes.md 到 /tmp"
+      ]
+    },
+    {
+      "cap": "svc-status-G",
+      "expect": "systemctl",
+      "desc": "单个服务状态",
+      "utterances": [
+        "ssh 服务状态怎么样",
+        "看看 cron 服务的状态",
+        "docker 服务现在什么情况",
+        "查一下 systemd-journald 服务状态"
+      ]
+    },
+    {
+      "cap": "gw-dns-G",
+      "expect": "ip",
+      "desc": "网关 / 路由",
+      "utterances": [
+        "本机网关是多少",
+        "默认路由是什么",
+        "看看路由"
+      ]
+    },
+    {
+      "cap": "resolv-G",
+      "expect": "cat",
+      "desc": "DNS 服务器配置",
+      "utterances": [
+        "本机的 dns 服务器是什么",
+        "域名服务器配的是哪个",
+        "看看 resolv.conf"
+      ]
+    },
+    {
+      "cap": "path-read-G",
+      "expect": "ls",
+      "desc": "带路径的只读询问（目录）",
+      "utterances": [
+        "看看 /var/log 里有什么",
+        "列出 /etc 下的东西",
+        "显示 /tmp 里面有什么"
+      ]
+    },
+    {
+      "cap": "path-file-G",
+      "expect": "cat",
+      "desc": "带路径的只读询问（文件）",
+      "utterances": [
+        "看看 /etc/hostname 的内容",
+        "读取 /etc/os-release",
+        "显示 /etc/hosts"
+      ]
+    }
+  ]
+}

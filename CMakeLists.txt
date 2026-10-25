@@ -81,6 +81,7 @@ add_library(nlc SHARED
     src/libnlc/decision.c
     src/libnlc/decision_cmd.c
     src/libnlc/decision_model.c
+    src/libnlc/cmdgen.c
     src/libnlc/freeze.c
     src/libnlc/snapshot.c
     src/libnlc/exec.c

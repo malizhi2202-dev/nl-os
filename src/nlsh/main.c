@@ -21,7 +21,7 @@ static volatile int g_running=1;
 static void sigint_handler(int sig) { (void)sig; g_running=0; }
 static void print_usage(void) {
     printf("nlsh - NL-Shell\n");
-    printf("用法: nlsh [--dry-run] [--yes] [--verbose] [--no-model] [--registry PATH]\n");
+    printf("用法: nlsh [--dry-run] [--yes] [--verbose] [--no-model] [--cmdgen|--no-cmdgen] [--registry PATH]\n");
     printf("           [--scan] [--self-test] [--audit] [--undo [N]] [-c cmd]\n");
     printf("           [--decide 自然语言]   只做决策（候选收缩 + 受约束 Choice），不执行\n");
     printf("           [--eval FILE]         跑中文评测集，输出逐条决策 + 汇总\n");
@@ -136,7 +136,8 @@ static int run_decide(const char *reg_path, const char *input, int no_model) {
 }
 
 int main(int argc, char **argv) {
-    int dry_run=0,verbose __attribute__((unused)) =0,no_model=0;
+    int dry_run=0,verbose=0,no_model=0;
+    int cmdgen=-1;   /* -1 = 跟随默认（有专用模型就开）；--cmdgen/--no-cmdgen 覆盖 */
     int do_scan=0, do_selftest=0, do_audit=0, do_undo=0;
     int undo_n=1;
     long audit_since = 0;
@@ -147,7 +148,7 @@ int main(int argc, char **argv) {
     const char *eval_path=NULL;
     int do_serve=0, serve_idle=300, serve_max_idle=3600;
     const char *serve_socket=NULL;
-    for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--yes")==0)setenv("NL_ASSUME_YES","1",1); else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
+    for(int i=1;i<argc;i++) { if(strcmp(argv[i],"--dry-run")==0)dry_run=1; else if(strcmp(argv[i],"--yes")==0)setenv("NL_ASSUME_YES","1",1); else if(strcmp(argv[i],"--verbose")==0)verbose=1; else if(strcmp(argv[i],"--no-model")==0)no_model=1; else if(strcmp(argv[i],"--cmdgen")==0)cmdgen=1; else if(strcmp(argv[i],"--no-cmdgen")==0)cmdgen=0; else if(strcmp(argv[i],"-c")==0&&i+1<argc)cmd=argv[++i];
         else if(strcmp(argv[i],"--registry")==0&&i+1<argc)registry_path=argv[++i];
         else if(strcmp(argv[i],"--scan")==0)do_scan=1;
         else if(strcmp(argv[i],"--self-test")==0)do_selftest=1;
@@ -238,6 +239,10 @@ int main(int argc, char **argv) {
 
     /* --no-model：既不加载模型，也不去问常驻进程（否则等于偷偷用了模型） */
     nl_dispatch_set_remote(!no_model);
+    /* 专用 NL2Bash 小模型（ADR-025）：--no-model 一并关掉（它也是模型）；
+     * 否则按显式开关，未指定时"有模型就开"。 */
+    nl_dispatch_set_cmdgen(no_model ? 0 : cmdgen);
+    nl_dispatch_set_verbose(verbose);
     if(!no_model) {
         int tier = nl_resolve_tier();
         NlBackend be = nl_backend_for_tier(tier);
@@ -267,6 +272,7 @@ int main(int argc, char **argv) {
             (void)nl_cap_save_atomic(reg, reg_path);
     }
     nl_dispatch_set_registry(reg);
+    nl_set_registry(reg);          /* 分层解析的第三层要用它做受约束选择（ADR-024） */
 
     if(cmd) {
         char out[4096];

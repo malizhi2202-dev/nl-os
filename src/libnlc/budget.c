@@ -40,6 +40,25 @@ static const char *const UNSUPPORTED_WORDS[] = {
     "并发", "守护", NULL
 };
 
+/* `压缩包` 是一个归档文件（名词），不是"压缩"这个动作。
+ * 事故：「把这个压缩包搬到 /opt」被判成"需要压缩能力 → 本层做不到"而拒绝。 */
+static int unsupported_hit(const char *input)
+{
+    for (int i = 0; UNSUPPORTED_WORDS[i] != NULL; i++) {
+        const char *w = UNSUPPORTED_WORDS[i];
+        size_t wl = strlen(w);
+        const char *p = input;
+        while ((p = strstr(p, w)) != NULL) {
+            if (strcmp(w, "压缩") == 0 && strncmp(p + wl, "包", 3) == 0) {
+                p += wl;
+                continue;              /* 压缩包：不是动作 */
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int contains_any(const char *input, const char *const *words)
 {
     for (int i = 0; words[i] != NULL; i++)
@@ -104,7 +123,7 @@ NlBudgetVerdict nl_budget_check(const char *input, const NlCapRegistry *r,
 
     if (contains_any(input, COMPOSITE_WORDS)) add_dim(detail, NL_DIM_COMPOSITE);
     if (contains_any(input, PRIV_WORDS)) add_dim(detail, NL_DIM_PRIVILEGE);
-    if (contains_any(input, UNSUPPORTED_WORDS)) add_dim(detail, NL_DIM_UNKNOWN_CAP);
+    if (unsupported_hit(input)) add_dim(detail, NL_DIM_UNKNOWN_CAP);
     if (count_chain(input) >= 1) add_dim(detail, NL_DIM_TOO_MANY_CAPS);
 
     if (detail->dim_count == 0) return NL_BUDGET_PASS;

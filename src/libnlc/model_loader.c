@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <math.h>
 
@@ -31,7 +32,25 @@ struct NlModel {
 };
 
 /* 在目录里找第一个 *.gguf（按目录顺序；候选名差异足够，不必排序） */
-static int find_gguf_in(const char *dir, char *out, size_t cap)
+/* 文件名里是否有某个关键词（大小写不敏感） */
+static int name_has(const char *name, const char *kw)
+{
+    size_t kl = strlen(kw);
+    for (const char *p = name; *p; p++) {
+        size_t i = 0;
+        while (i < kl && p[i] &&
+               tolower((unsigned char)p[i]) == tolower((unsigned char)kw[i])) i++;
+        if (i == kl) return 1;
+    }
+    return 0;
+}
+
+/* 按用途找 gguf：
+ *   look_cmdgen = 0 → 指令模型（不是 nl2bash/nl2sh 专用模型）
+ *   look_cmdgen = 1 → 自然语言→命令 专用模型
+ * 两类必须分开：同目录下放两个模型时，readdir 顺序不可依赖，
+ * 否则"分类用的指令模型"可能被换成"生成命令的 nl2bash 模型"，两条链全乱。 */
+static int find_gguf_in(const char *dir, char *out, size_t cap, int look_cmdgen)
 {
     if (!dir || !dir[0]) return 0;
     DIR *d = opendir(dir);
@@ -41,6 +60,9 @@ static int find_gguf_in(const char *dir, char *out, size_t cap)
     while (!found && (ent = readdir(d)) != NULL) {
         size_t n = strlen(ent->d_name);
         if (n < 7 || strcmp(ent->d_name + n - 5, ".gguf") != 0) continue;
+        int is_cmdgen = name_has(ent->d_name, "nl2bash") || name_has(ent->d_name, "nl2sh") ||
+                        name_has(ent->d_name, "bash-gguf") || name_has(ent->d_name, "nl2cmd");
+        if (is_cmdgen != look_cmdgen) continue;
         snprintf(out, cap, "%s/%s", dir, ent->d_name);
         if (access(out, R_OK) == 0) found = 1;
     }
@@ -55,18 +77,42 @@ const char *nl_model_default_path(void)
     /* 显式指定就尊重它（即使读不到也要原样返回，让调用方按"模型不可用"处理） */
     if (env && env[0]) return env;
 
-    if (find_gguf_in("/usr/share/nl-os", buf, sizeof(buf))) return buf;
+    if (find_gguf_in("/usr/share/nl-os", buf, sizeof(buf), 0)) return buf;
 
     char dir[512];
     const char *xdg = getenv("XDG_DATA_HOME");
     const char *home = getenv("HOME");
     if (xdg && xdg[0]) {
         snprintf(dir, sizeof(dir), "%s/nl-os", xdg);
-        if (find_gguf_in(dir, buf, sizeof(buf))) return buf;
+        if (find_gguf_in(dir, buf, sizeof(buf), 0)) return buf;
     }
     if (home && home[0]) {
         snprintf(dir, sizeof(dir), "%s/.local/share/nl-os", home);
-        if (find_gguf_in(dir, buf, sizeof(buf))) return buf;
+        if (find_gguf_in(dir, buf, sizeof(buf), 0)) return buf;
+    }
+    return NULL;
+}
+
+/* 自然语言 → 命令 专用模型（NL2Bash / NL2SH 系列）。
+ * 与"指令模型"分开存放、分开加载：这两条链的 prompt 格式和输出约定完全不同。 */
+const char *nl_cmdgen_model_path(void)
+{
+    static char buf[1024];
+    const char *env = getenv("NL_CMDGEN_MODEL");
+    if (env) return env[0] ? env : NULL;   /* 显式设为空串 = 关闭 */
+
+    if (find_gguf_in("/usr/share/nl-os", buf, sizeof(buf), 1)) return buf;
+
+    char dir[512];
+    const char *xdg = getenv("XDG_DATA_HOME");
+    const char *home = getenv("HOME");
+    if (xdg && xdg[0]) {
+        snprintf(dir, sizeof(dir), "%s/nl-os", xdg);
+        if (find_gguf_in(dir, buf, sizeof(buf), 1)) return buf;
+    }
+    if (home && home[0]) {
+        snprintf(dir, sizeof(dir), "%s/.local/share/nl-os", home);
+        if (find_gguf_in(dir, buf, sizeof(buf), 1)) return buf;
     }
     return NULL;
 }

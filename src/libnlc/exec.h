@@ -19,6 +19,10 @@ int nl_exec_form_allowed(const char *cmd);
 /* 执行一条已生成命令。返回退出码（0 = 成功），-1 = 拒绝/超时/无法执行 */
 int nl_exec_execute(const char *cmd, int timeout_ms);
 
+/* 受限管道：只用 '|' 连接、每段都是普通命令（不含其它元字符）。
+ * 由调用方逐段做能力/权限校验后才会走到这里；执行走 fork+pipe，不经 shell。 */
+int nl_exec_execute_pipeline(const char *cmd, int timeout_ms);
+
 /* 从生成命令里提取目标路径（跳过 argv0 与 -flag），返回条数 */
 int nl_exec_collect_paths(const char *cmd, char paths[][NL_EXEC_PATH_MAX], int max);
 

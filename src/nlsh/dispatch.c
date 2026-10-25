@@ -1,5 +1,6 @@
 #include "dispatch.h"
 #include "nlc_api.h"
+#include "cmdgen.h"
 #include "ipc_client.h"
 #include "exec.h"
 #include "confirm.h"
@@ -21,10 +22,20 @@ static const char *CMD_PREFIX[] = {"ls","cd","ps","echo","find","grep","cat","le
 int nl_is_traditional_cmd(const char *input) {
     if (!input||!*input) return 0;
     const char *s=input; while(*s==' ')s++;
+    /* echo / printf 的参数本来就是文本，允许中文；其它命令名后面紧跟中文时
+     * 这大概率是一句自然语言：「docker 服务的状态」曾被整条当命令执行（docker 报错）。 */
+    int text_arg_cmd = (strncmp(s,"echo",4)==0||strncmp(s,"printf",6)==0);
     for(int i=0;CMD_PREFIX[i];i++) {
         size_t l=strlen(CMD_PREFIX[i]);
-        if(strncmp(s,CMD_PREFIX[i],l)==0&&(!s[l]||s[l]==' '||s[l]=='|'||s[l]==';'||s[l]=='&'||s[l]=='>'||s[l]=='<'))
-            return 1;
+        if(strncmp(s,CMD_PREFIX[i],l)!=0) continue;
+        /* 命令名必须在词边界上：`lsblk` 不是 `ls`（这一条写错过一次，
+         * 把 `s[l] || …` 的短路当成了"边界判断"，等于取消了边界检查） */
+        if(s[l] && s[l]!=' ' && s[l]!='|' && s[l]!=';' && s[l]!='&' &&
+           s[l]!='>' && s[l]!='<') continue;
+        const char *rest = s + l;
+        while(*rest==' ') rest++;
+        if(*rest && (unsigned char)*rest >= 0x80 && !text_arg_cmd) return 0;
+        return 1;
     }
     if(*s=='/'||*s=='.'||*s=='~'||strchr(s,'|')||strchr(s,'>')||strchr(s,'<'))
         return 1;
@@ -34,6 +45,14 @@ int nl_is_traditional_cmd(const char *input) {
 
 static NlCapRegistry *g_reg;
 static int g_remote_ok = 1;
+static int g_cmdgen = -1;     /* -1 = 未设置（默认开，取决于模型是否存在） */
+
+void nl_dispatch_set_cmdgen(int on) { g_cmdgen = on; }
+static int cmdgen_enabled(void)
+{
+    if (g_cmdgen >= 0) return g_cmdgen;
+    return nl_cmdgen_available();
+}
 
 void nl_dispatch_set_remote(int on) { g_remote_ok = on; }
 
@@ -208,7 +227,45 @@ static int suggest_from_keywords(const char *input, char out[3][NL_CAP_MAX_ID_LE
     return n;
 }
 
+/* 专用模型生成的命令是否可执行：
+ *   1) 除 '|' 之外不许有任何 shell 元字符（管道是允许的，但只是"多段普通命令"）；
+ *   2) 每一段的 argv0 必须是本机注册过的、**只读（L1）**能力 —— 模型生成的管道
+ *      不许带写操作，否则 | 就成了绕过确认门的通道。
+ * 返回 1 = 可以执行。 */
+static int gen_cmd_is_safe(const char *cmd)
+{
+    if (!cmd || !*cmd) return 0;
+    static const char *const BANNED_EXCEPT_PIPE = ";&$`><()[]{}*?!\\\'\"";
+    if (strpbrk(cmd, BANNED_EXCEPT_PIPE) != NULL) return 0;
+
+    char buf[512];
+    snprintf(buf, sizeof(buf), "%s", cmd);
+    int stages = 0;
+    char *save = NULL;
+    for (char *t = strtok_r(buf, "|", &save); t; t = strtok_r(NULL, "|", &save)) {
+        while (*t == ' ' || *t == '\t') t++;
+        if (!*t) return 0;
+        stages++;
+        if (stages > 4) return 0;
+
+        char a0[64];
+        size_t i = 0;
+        while (t[i] && t[i] != ' ' && t[i] != '\t' && i < sizeof(a0) - 1) { a0[i] = t[i]; i++; }
+        a0[i] = '\0';
+        if (nl_shell_builtin_is(a0)) continue;
+        if (!g_reg) return 0;
+        char cid[NL_CAP_MAX_ID_LEN];
+        snprintf(cid, sizeof(cid), "cli:%s", a0);
+        const NlCapability *c = nl_cap_find(g_reg, cid);
+        if (!c || c->perm_level != 1) return 0;   /* 只读才放行 */
+    }
+    return stages > 0;
+}
+
 /* 统一打印出口：dispatch 自己负责输出（执行路径要与子进程输出交错） */
+static int g_verbose = 0;
+void nl_dispatch_set_verbose(int on) { g_verbose = on; }
+
 static void say(const char *text)
 {
     if (text && text[0]) { fputs(text, stdout); fputc('\n', stdout); fflush(stdout); }
@@ -291,6 +348,39 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
 
     NlParseResult r;
     if (parse_smart(input, &r) != 0 || !r.command) {
+        /* ── 专用 NL2Bash 小模型兜底（ADR-025）──
+         * 规则/决策/指令模型都没结果时，交给"只做一件事"的微调模型直接吐命令。
+         * 它输出的是**自由文本**，所以这里逐条过安全闸：
+         *   1) 不许含 shell 元字符（与规则层同一套检查）；
+         *   2) argv0 必须在本机能力注册表里（能力存在性）；
+         *   3) 权限等级 L4 直接丢；L2/L3 仍然要确认（下面的确认门照常生效）。 */
+        char gen[512];
+        if (cmdgen_enabled() && nl_cmdgen_generate(input, gen, sizeof(gen)) == 0 &&
+            gen_cmd_is_safe(gen)) {
+            char gargv0[64], gcap[NL_CAP_MAX_ID_LEN];
+            command_argv0(gen, gargv0, sizeof(gargv0));
+            snprintf(gcap, sizeof(gcap), "cli:%s", gargv0);
+            int is_builtin = nl_shell_builtin_is(gargv0);
+            if (is_builtin) snprintf(gcap, sizeof(gcap), "shell:%s", gargv0);
+            const NlCapability *gc = (g_reg && !is_builtin) ? nl_cap_find(g_reg, gcap) : NULL;
+            if (is_builtin || (gc && gc->perm_level <= 3)) {
+                int perm = is_builtin ? 1 : gc->perm_level;
+                memset(&r, 0, sizeof(r));
+                r.command = strdup(gen);
+                if (!r.command) return -1;
+                r.intent = NL_INTENT_OTHER;
+                r.perm_level = (NlPermLevel)perm;
+                r.needs_confirm = (perm >= 2);
+                r.source = NL_SOURCE_MODEL;
+                r.confidence = 1.0f;
+                r.is_pipeline = (strchr(gen, '|') != NULL);
+                snprintf(r.debug_info, sizeof(r.debug_info),
+                         "[NL2Bash 专用模型] 生成命令，已过元字符/能力/权限检查%s",
+                         r.is_pipeline ? "（受限管道）" : "");
+            }
+        }
+    }
+    if (!r.command) {
         /* 解析失败也要说清原因：能猜的给候选，猜不到的直说 */
         char cands[3][NL_CAP_MAX_ID_LEN];
         int n = suggest_from_keywords(input, cands);
@@ -308,6 +398,9 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
         audit_emit(input, "", "refused", "refused", "unparsed", 0, 0);
         return -1;
     }
+
+    if (g_verbose && r.debug_info[0])
+        fprintf(stderr, "   [debug] %s\n", r.debug_info);
 
     /* ── 能力存在性：解析出能力但本机没有 → 明确拒绝并给候选 ── */
     char argv0[64], cap_id[NL_CAP_MAX_ID_LEN];
@@ -330,7 +423,9 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
         return -1;
     }
 
-    if (nl_exec_has_metachars(r.command)) {
+    /* 受限管道例外：`|` 已经由 gen_cmd_is_safe() 逐段校验过（每段都是只读能力），
+     * 执行时走 nl_exec_execute_pipeline（fork+pipe，不经 shell）。 */
+    if (nl_exec_has_metachars(r.command) && !r.is_pipeline) {
         snprintf(output, out_sz, "拒绝执行：生成的命令含 shell 元字符：%s", r.command);
         say(output);
         audit_emit(input, cap_id, "refused", "refused", "metachar", 0, 0);
@@ -410,7 +505,8 @@ int nl_dispatch(const char *input, char *output, size_t out_sz, int dry_run)
     fflush(stdout);
     fflush(stderr);
     long t0 = now_us();
-    int rc = nl_exec_execute(r.command, 5000);
+    int rc = r.is_pipeline ? nl_exec_execute_pipeline(r.command, 5000)
+                           : nl_exec_execute(r.command, 5000);
     long dur = now_us() - t0;
 
     if (rc == 0) {

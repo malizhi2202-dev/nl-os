@@ -72,6 +72,23 @@ static int ascii_boundary_ok(const char *s, const char *match, size_t len) {
 }
 
 
+/* 句子里有没有"约束条件"（大小/时间/数量…）。
+ * 字面量模板（没有槽位）表达不了它们：命中就是答非所问 ——
+ * 「列出大于 100M 的文件」曾被 rule#50 答成裸 `ls -la`，约束被整条丢掉。 */
+int nl_input_has_constraint(const char *input)
+{
+    static const char *const C[] = {
+        "大于", "小于", "超过", "不到", "少于", "多于", "最近", "天前", "小时前",
+        "分钟前", "本周", "上周", "本月", "最大的", "最小的",
+        "最多的", "占最多", "按大小", "按时间",
+        NULL
+    };
+    if (!input) return 0;
+    for (int i = 0; C[i]; i++)
+        if (strstr(input, C[i])) return 1;
+    return 0;
+}
+
 /* 泛名词：句子里根本没有指明具体对象。
  *
  * 「删除文件」里的"文件"不是文件名，是一个**类别**。把它当对象执行就是
@@ -178,6 +195,46 @@ static size_t trim_slot_span(const char *s, size_t len) {
     return len;
 }
 
+/* 反复剥离句尾的结构词（的文件夹 / 目录 / 文件 / 的内容 / 结尾的「的」）。
+ * after_key 和 before_verb 都要用：`把 build 目录移到 /tmp` 的源是 build，不是 `build 目录`。 */
+static void strip_slot_suffixes(char *work) {
+    for (int guard = 0; guard < 4; guard++) {
+        size_t len = trim_slot_span(work, strlen(work));
+        work[len] = '\0';
+        int stripped = 0;
+
+        for (int i = 0; SLOT_SUFFIX_ALWAYS[i]; i++) {
+            size_t sl = strlen(SLOT_SUFFIX_ALWAYS[i]);
+            if (len > sl && strcmp(work + len - sl, SLOT_SUFFIX_ALWAYS[i]) == 0) {
+                work[len - sl] = '\0';
+                stripped = 1;
+                break;
+            }
+        }
+        if (!stripped) {
+            for (int i = 0; SLOT_SUFFIXES[i]; i++) {
+                size_t sl = strlen(SLOT_SUFFIXES[i]);
+                if (len <= sl || strcmp(work + len - sl, SLOT_SUFFIXES[i]) != 0) continue;
+                /* 后缀前必须是空白，避免把 `旧文件` 啃成 `旧` */
+                if (!isspace((unsigned char)work[len - sl - 1])) continue;
+                work[len - sl] = '\0';
+                stripped = 1;
+                break;
+            }
+        }
+        if (!stripped) {
+            /* 结尾单独的 `的` 也去掉（`叫 x 的`） */
+            size_t dl = strlen("的");
+            if (len > dl && strcmp(work + len - dl, "的") == 0 &&
+                isspace((unsigned char)work[len - dl - 1])) {
+                work[len - dl] = '\0';
+                stripped = 1;
+            }
+        }
+        if (!stripped) break;
+    }
+}
+
 /* 去掉包裹的引号（"x" / 'x' / “x”） */
 static char *strip_wrapping_quotes(const char *s) {
     size_t len = strlen(s);
@@ -237,10 +294,46 @@ static char *extract_object_before_verb(const char *input, const char *verb) {
         }
     }
 
+    strip_slot_suffixes(raw);
     size_t len = trim_slot_span(raw, strlen(raw));
     raw[len] = '\0';
     if (!raw[0]) { free(raw); return NULL; }
     return raw;
+}
+
+/* "A 到 B" 结构：取两个关键词**之间**的内容。
+ * `复制 a.txt 到 /tmp` 的源在「复制」和「到」之间；用 after_key(复制) 会把
+ * "a.txt 到 /tmp" 整段当源，生成 `cp -r a.txt 到 /tmp /tmp` 这种垃圾。
+ * key 的写法是 "起始词|结束词"。 */
+static char *extract_between(const char *input, const char *key) {
+    if (!input || !key) return NULL;
+    const char *bar = strchr(key, '|');
+    if (!bar) return NULL;
+    char start_kw[32], end_kw[32];
+    size_t sl = (size_t)(bar - key);
+    if (sl == 0 || sl >= sizeof(start_kw)) return NULL;
+    memcpy(start_kw, key, sl);
+    start_kw[sl] = '\0';
+    snprintf(end_kw, sizeof(end_kw), "%s", bar + 1);
+    if (!end_kw[0]) return NULL;
+
+    const char *p = strstr(input, start_kw);
+    if (!p) return NULL;
+    p += strlen(start_kw);
+    const char *e = strstr(p, end_kw);
+    if (!e) return NULL;
+    while (e > p && isspace((unsigned char)e[-1])) e--;
+    while (p < e && isspace((unsigned char)*p)) p++;
+    if (e <= p) return NULL;
+
+    char *work = strndup(p, (size_t)(e - p));
+    if (!work) return NULL;
+    char *clean = strip_wrapping_quotes(work);
+    free(work);
+    if (!clean) return NULL;
+    strip_slot_suffixes(clean);
+    if (!clean[0]) { free(clean); return NULL; }
+    return clean;
 }
 
 /* 查找关键词后的内容（如 "删除" 后面的剩余内容作为 target） */
@@ -255,42 +348,7 @@ static char *extract_after_key_long(const char *input, const char *key) {
     char *work = strip_wrapping_quotes(pos);
     if (!work) return NULL;
 
-    /* 反复剥离后缀，直到不再变化 */
-    for (int guard = 0; guard < 4; guard++) {
-        size_t len = trim_slot_span(work, strlen(work));
-        work[len] = '\0';
-        int stripped = 0;
-
-        for (int i = 0; SLOT_SUFFIX_ALWAYS[i]; i++) {
-            size_t sl = strlen(SLOT_SUFFIX_ALWAYS[i]);
-            if (len > sl && strcmp(work + len - sl, SLOT_SUFFIX_ALWAYS[i]) == 0) {
-                work[len - sl] = '\0';
-                stripped = 1;
-                break;
-            }
-        }
-        if (!stripped) {
-            for (int i = 0; SLOT_SUFFIXES[i]; i++) {
-                size_t sl = strlen(SLOT_SUFFIXES[i]);
-                if (len <= sl || strcmp(work + len - sl, SLOT_SUFFIXES[i]) != 0) continue;
-                /* 后缀前必须是空白，避免把 `旧文件` 啃成 `旧` */
-                if (!isspace((unsigned char)work[len - sl - 1])) continue;
-                work[len - sl] = '\0';
-                stripped = 1;
-                break;
-            }
-        }
-        if (!stripped) {
-            /* 结尾单独的 `的` 也去掉（`叫 x 的`） */
-            size_t dl = strlen("的");
-            if (len > dl && strcmp(work + len - dl, "的") == 0 &&
-                isspace((unsigned char)work[len - dl - 1])) {
-                work[len - dl] = '\0';
-                stripped = 1;
-            }
-        }
-        if (!stripped) break;
-    }
+    strip_slot_suffixes(work);
 
     size_t final_len = trim_slot_span(work, strlen(work));
     while (final_len > 0 && isspace((unsigned char)work[final_len - 1])) final_len--;
@@ -323,6 +381,118 @@ static char *extract_after_key_long(const char *input, const char *key) {
  * 按"关键词后第一个词"取会得到 `wwww.baidu.com这个域名的dns` 这样的垃圾。
  * 这里改为扫描 ASCII 串，逐个用 nl_domain_check 校验，只认校验通过的。
  * 校验不过 = 认不出域名 = 这条规则不成立（绝不拼半个参数去执行）。 */
+/* 从一句话里抠出服务名（systemd unit 名形状）。
+ *
+ * 与域名同理：这是要拼进 `systemctl status <name>` 的自由文本，只能按形状取。
+ * 排除句子里那些"长得像名字但不是服务"的 ASCII 词（工具名、状态词等），
+ * 否则「看看 systemctl 服务状态」会变成 `systemctl status systemctl`。 */
+/* 从一句话里抠出文件名（带扩展名的 ASCII 串）。
+ *
+ * 「创建test.txt」「查看xxx.md」这类说法里，文件名**直接粘在中文动词后面**，
+ * 没有空格、也没有「叫」：「叫」类规则的 after_key 取不到它。
+ * 形状判据：含一个 '.'，全是 [A-Za-z0-9._-]，不以 '-' / '.' 开头，且不在路径里
+ * （路径由 path 那一层处理）。
+ * 只认**带扩展名**的名字：没有扩展名的 ASCII 词是文件还是目录无法从形状判断，
+ * 那种情况有专门的说法（创建…文件夹 / 创建目录），不在这里猜。 */
+char *nl_extract_filename(const char *input)
+{
+    if (!input) return NULL;
+
+    const char *p = input;
+    while (*p) {
+        unsigned char c = (unsigned char)*p;
+        if (!(isalnum(c) || c == '.' || c == '_' || c == '-')) { p++; continue; }
+
+        if (p > input && p[-1] == '/') {          /* 路径里的一段：不是"文件名参数" */
+            while (*p) {
+                unsigned char d = (unsigned char)*p;
+                if (!(isalnum(d) || d == '.' || d == '_' || d == '-')) break;
+                p++;
+            }
+            continue;
+        }
+
+        const char *start = p;
+        while (*p) {
+            unsigned char d = (unsigned char)*p;
+            if (!(isalnum(d) || d == '.' || d == '_' || d == '-')) break;
+            p++;
+        }
+        size_t len = (size_t)(p - start);
+        if (len < 3 || len > 255) continue;
+
+        char *cand = strndup(start, len);
+        if (!cand) return NULL;
+
+        /* 必须有扩展名，且扩展名是字母开头的 1..10 位（.md / .txt / .tar.gz 都行） */
+        const char *dot = strrchr(cand, '.');
+        int ok = 0;
+        if (dot && dot != cand && dot[1] && isalpha((unsigned char)dot[1])) {
+            size_t el = strlen(dot + 1);
+            if (el >= 1 && el <= 10) {
+                int all_alpha = 1;
+                for (const char *q = dot + 1; *q; q++)
+                    if (!isalnum((unsigned char)*q)) { all_alpha = 0; break; }
+                if (all_alpha) ok = 1;
+            }
+        }
+        if (cand[0] == '-' || cand[0] == '.') ok = 0;
+        /* 域名形状且 TLD 常见（example.net / baidu.com）→ 交给域名那条链，
+         * 不在这里当文件名（否则「看看 example.net 指向哪」会变成 cat example.net）。
+         * TLD 不常见（README.md / config.yaml）→ 当文件名。 */
+        if (ok && nl_domain_check(cand) == 0 && nl_tld_is_common(cand)) ok = 0;
+        if (ok) return cand;
+        free(cand);
+    }
+    return NULL;
+}
+
+char *nl_extract_service_name(const char *input) {
+    static const char *const NOT_A_SERVICE[] = {
+        "systemctl", "service", "services", "status", "unit", "units",
+        "list", "list-units", "start", "stop", "restart", "enable", "disable",
+        "the", "and", NULL
+    };
+    if (!input) return NULL;
+
+    const char *p = input;
+    while (*p) {
+        unsigned char c = (unsigned char)*p;
+        if (!(isalnum(c) || c == '-' || c == '_' || c == '.' || c == '@' || c == ':')) { p++; continue; }
+
+        /* 路径里的那一段不是服务名 */
+        if (p > input && p[-1] == '/') {
+            while (*p) {
+                unsigned char d = (unsigned char)*p;
+                if (!(isalnum(d) || d == '-' || d == '_' || d == '.' || d == '@' || d == ':')) break;
+                p++;
+            }
+            continue;
+        }
+
+        const char *start = p;
+        while (*p) {
+            unsigned char d = (unsigned char)*p;
+            if (!(isalnum(d) || d == '-' || d == '_' || d == '.' || d == '@' || d == ':')) break;
+            p++;
+        }
+        size_t len = (size_t)(p - start);
+        if (len < 2 || len > 256) continue;
+
+        char *cand = strndup(start, len);
+        if (!cand) return NULL;
+
+        int excluded = 0;
+        for (int i = 0; NOT_A_SERVICE[i]; i++)
+            if (strcmp(cand, NOT_A_SERVICE[i]) == 0) { excluded = 1; break; }
+        if (excluded) { free(cand); continue; }
+
+        if (nl_service_name_check(cand) == 0) return cand;
+        free(cand);
+    }
+    return NULL;
+}
+
 char *nl_extract_domain(const char *input) {
     if (!input) return NULL;
 
@@ -392,6 +562,12 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
     if (!input || !result) return -1;
     memset(result, 0, sizeof(NlRuleResult));
 
+    /* 带约束条件（大于 100M / 最近三天 / 按大小排序…）的句子，规则层一律不接：
+     * 我们的模板没有表达这些约束的槽位，命中任何一条都是答非所问
+     * （「列出大于 100M 的文件」曾被答成裸 `ls -la`、「找最近三天改过的文件」
+     * 曾生成 `find . -name 最近三天修改过`）。这类交给专用 NL2Bash 模型。 */
+    if (nl_input_has_constraint(input)) return -1;
+
     /* 遍历规则，找到第一个所有 keywords 都匹配的（子串匹配） */
     for (int i = 0; RULES[i].id != 0; i++) {
         const NlRule *rule = &RULES[i];
@@ -415,7 +591,7 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
         result->confidence = 1.0f;
 
         /* 提取槽位值 */
-        int domain_missing = 0;
+        int domain_missing = 0;   /* 结构性参数（域名/文件名/服务名…）抠不出来 */
         for (int s = 0; rule->slots[s].name; s++) {
             const NlRuleSlotDef *slot = &rule->slots[s];
             if (result->slot_count >= NL_MAX_SLOTS) break;
@@ -425,8 +601,18 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
                 value = extract_after_key(input, slot->key ? slot->key : rule->keywords[0]);
             } else if (strcmp(slot->match_type, "after_key") == 0) {
                 value = extract_after_key_long(input, slot->key);
+            } else if (strcmp(slot->match_type, "filename") == 0) {
+                value = nl_extract_filename(input);
+                if (!value) domain_missing = 1;
+            } else if (strcmp(slot->match_type, "service") == 0) {
+                value = nl_extract_service_name(input);
+                if (!value) domain_missing = 1;
+            } else if (strcmp(slot->match_type, "between") == 0) {
+                value = extract_between(input, slot->key);
+                if (!value) domain_missing = 1;
             } else if (strcmp(slot->match_type, "before_verb") == 0) {
                 value = extract_object_before_verb(input, slot->key);
+                if (!value) domain_missing = 1;
             } else if (strcmp(slot->match_type, "domain") == 0) {
                 value = nl_extract_domain(input);
                 if (!value) domain_missing = 1;   /* 认不出域名 = 规则不成立 */

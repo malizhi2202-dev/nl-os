@@ -40,6 +40,10 @@ NlModel *nl_model_init(const char *model_path);
  */
 const char *nl_model_default_path(void);
 
+/* 自然语言 → 命令 专用小模型路径（NL2Bash/NL2SH 微调）：$NL_CMDGEN_MODEL 优先，
+ * 否则在标准目录里找名字带 nl2bash/nl2sh/nl2cmd 的 gguf。没有返回 NULL（能力关闭）。 */
+const char *nl_cmdgen_model_path(void);
+
 /*
  * 获取模型元信息
  * 返回: 模型信息（调用者不需释放）

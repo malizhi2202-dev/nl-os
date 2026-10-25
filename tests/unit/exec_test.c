@@ -111,6 +111,17 @@ static void test_form_allowlist(void)
     /* 拒绝必须在执行前生效（否则就是一条真的改系统的命令） */
     ASSERT(nl_exec_execute("ip link set lo down", 2000) == -1, "denied at exec");
 
+    /* 网关/路由表 与 服务状态：新登记的只读形态 */
+    ASSERT(nl_exec_form_allowed("ip route") == 1, "ip route allowed");
+    ASSERT(nl_exec_form_allowed("systemctl list-units --type=service --no-pager") == 1,
+           "systemctl list-units allowed");
+    ASSERT(nl_exec_form_allowed("systemctl status nginx") == 1, "systemctl status allowed");
+    ASSERT(nl_exec_form_allowed("systemctl status nginx.service") == 1, "带 .service 允许");
+    ASSERT(nl_exec_form_allowed("systemctl stop nginx") == 0, "systemctl stop 拒绝");
+    ASSERT(nl_exec_form_allowed("systemctl status -f") == 0, "选项注入拒绝");
+    ASSERT(nl_exec_form_allowed("systemctl status nginx extra") == 0, "多参数拒绝");
+    ASSERT(nl_exec_form_allowed("ip link set eth0 up") == 0, "ip 写形态拒绝");
+
     /* 未受控的二进制不受影响 */
     ASSERT(nl_exec_form_allowed("ls -la") == 1, "ls allowed");
     ASSERT(nl_exec_form_allowed("ps aux") == 1, "ps allowed");

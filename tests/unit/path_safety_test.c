@@ -326,6 +326,40 @@ static void test_domain_length_limits(void) {
 }
 
 /* ============================================================
+ * 服务名校验（ADR-024 续）
+ * ============================================================ */
+static void test_service_name(void) {
+    TEST("服务名只接受 unit 形状");
+    const char *ok[] = { "nginx", "docker", "nginx.service", "getty@tty1",
+                         "systemd-networkd", "a_b:c", "sshd" };
+    for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++)
+        ASSERT(nl_service_name_check(ok[i]) == 0, ok[i]);
+
+    const char *bad[] = { "", "-f", "--all", "ngi nx", "a/b", "a;b", "x.php?",
+                          "systemctl stop", "@@@", NULL };
+    for (size_t i = 0; bad[i]; i++)
+        ASSERT(nl_service_name_check(bad[i]) == -1, bad[i]);
+    ASSERT(nl_service_name_check(NULL) == -1, "NULL");
+    PASS();
+}
+
+/* 白名单根目录本身也要放行：`cp a /tmp` 不该被"不在 /tmp/ 之下"拒掉 */
+static void test_whitelist_root_itself(void) {
+    TEST("白名单根目录本身可写");
+    const char *ok[] = { "/tmp", "/home", "/opt", "/mnt", "/var/tmp" };
+    for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++) {
+        NlPathResult r = nl_path_check(ok[i], 1);
+        ASSERT(r.status == NL_PATH_PASS, ok[i]);
+        nl_path_result_free(&r);
+    }
+    /* 但 /tmpfoo 这种"只是前缀相同"的不行 */
+    NlPathResult r = nl_path_check("/tmpfoo", 1);
+    ASSERT(r.status != NL_PATH_PASS, "/tmpfoo 不在白名单");
+    nl_path_result_free(&r);
+    PASS();
+}
+
+/* ============================================================
  * 边界条件
  * ============================================================ */
 static void test_empty_path(void) {
@@ -388,6 +422,10 @@ int main(void) {
     test_domain_valid();
     test_domain_invalid();
     test_domain_length_limits();
+
+    printf("\n--- 服务名 / 白名单根 ---\n");
+    test_service_name();
+    test_whitelist_root_itself();
 
     printf("\n--- 边界条件 ---\n");
     test_empty_path();

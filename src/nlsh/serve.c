@@ -11,6 +11,8 @@
 #include "parse_ipc.h"
 #include "json_helper.h"
 #include "model_loader.h"
+#include "capability_registry.h"
+#include "capability_scan.h"
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
@@ -105,6 +107,21 @@ int nl_serve_run(const char *socket_path, int idle_secs, int max_idle_secs)
     if (slash && slash != dir) {
         *slash = '\0';
         if (mkdir(dir, 0700) != 0 && errno != EEXIST) return -1;
+    }
+
+    /* 注册表：解析的第三层（受约束选择）需要它。守护进程里也装一份，
+     * 否则常驻路径永远拿不到"候选收缩 + 受约束选择"（ADR-024）。 */
+    {
+        NlCapRegistry *reg = nl_cap_load(nl_cap_default_path(), NULL);
+        if (reg) {
+            if (nl_cap_count(reg) == 0) {
+                int ndirs = 0;
+                const char *const *dirs = nl_cap_default_dirs(&ndirs);
+                if (nl_cap_scan_dirs(dirs, ndirs, reg) > 0)
+                    (void)nl_cap_save_atomic(reg, nl_cap_default_path());
+            }
+            nl_set_registry(reg);       /* 借用：进程生命周期内常驻 */
+        }
     }
 
     int sfd = socket(AF_UNIX, SOCK_STREAM, 0);

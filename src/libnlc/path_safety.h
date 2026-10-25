@@ -37,6 +37,13 @@ NlPathResult nl_path_check(const char *path, int allow_write);
  * 用于「解析 <域名>」这类需要把自由文本拼进命令的只读查询。 */
 int nl_domain_check(const char *domain);
 
+/* 服务名校验（systemd unit 名）：[A-Za-z0-9@._:-]，不以 '-' 开头，长度 1..256。
+ * 与域名同理：这是拼进命令的自由文本，必须按形状收紧（挡 `systemctl status -f`）。 */
+int nl_service_name_check(const char *name);
+
+/* TLD 是否在"常见顶级域"表里（用于区分 example.net 这种域名 vs README.md 这种文件名） */
+int nl_tld_is_common(const char *domain);
+
 /* 输入净化：剥离零宽字符/bidi/ANSI/控制字符 */
 NlSanitizeResult nl_input_sanitize(const char *input);
 

@@ -71,6 +71,15 @@ void nl_rule_result_free(NlRuleResult *result);
  */
 char *nl_extract_domain(const char *input);
 
+/* 从一句话里抠出文件名（带扩展名，可直接粘在中文动词后）。返回 malloc，调用方 free。 */
+char *nl_extract_filename(const char *input);
+
+/* 句子里有没有约束条件（大小/时间/数量…）：字面量模板表达不了，命中也会答非所问。 */
+int nl_input_has_constraint(const char *input);
+
+/* 从一句话里抠出服务名（systemd unit 形状）。返回 malloc 字符串，调用方 free。 */
+char *nl_extract_service_name(const char *input);
+
 /*
  * 获取意图名称字符串
  */

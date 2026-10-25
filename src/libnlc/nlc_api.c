@@ -8,6 +8,8 @@
 #include "nlc_api.h"
 #include "resource_gate.h"
 #include "path_safety.h"
+#include "decision_cmd.h"
+#include "capability_registry.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +17,7 @@
 #include <unistd.h>
 
 static NlModel *g_model = NULL;
+static const struct NlCapRegistry *g_registry = NULL;   /* 借用：由宿主注入（ADR-024）*/
 static char g_model_path[512];   /* 惰性初始化记下的路径；空 = 未配置模型 */
 static char g_error[1024];
 
@@ -103,6 +106,9 @@ int nl_init_lazy(const char *model_path) {
 }
 
 int nl_model_is_loaded(void) { return g_model ? 1 : 0; }
+
+void nl_set_registry(const struct NlCapRegistry *reg) { g_registry = reg; }
+const struct NlCapRegistry *nl_get_registry(void) { return g_registry; }
 
 void nl_free(void) {
     if (g_model) { nl_model_free(g_model); g_model = NULL; }
@@ -229,6 +235,21 @@ int nl_parse(const char *input, NlParseResult *result) {
         snprintf(result->debug_info, sizeof(result->debug_info), "%s", debug);
         nl_sanitize_result_free(&sr);
         return -1;
+    }
+
+    /* ── Layer 3a: 受约束选择 ──
+     * 说法模糊、但候选里有不止一个"能生成命令"的能力时，让模型在候选集内选
+     * （GBNF 约束，它生成不出候选之外的 id）。选不出来就继续走经典 intent 提取。 */
+    if (g_registry) {
+        if (nl_parse_by_choice(g_model, clean_input, g_registry, result) == 1) {
+            dbg_pos += snprintf(debug + dbg_pos, sizeof(debug) - dbg_pos,
+                                "[受约束选择] cmd=%s perm=L%d; ",
+                                result->command, result->perm_level);
+            snprintf(result->debug_info, sizeof(result->debug_info), "%s", debug);
+            nl_rule_result_free(&rule_r);
+            nl_sanitize_result_free(&sr);
+            return 0;
+        }
     }
 
     NlIntentResult int_r;

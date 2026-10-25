@@ -109,9 +109,19 @@ int main(void)
     ASSERT(rc == 1 && r.command && strstr(r.command, "/ip"), "本机地址 → ip 而不是 dig");
     nl_parse_result_free(&r);
 
-    /* 1c. 句子里带路径 → 表内字面量答非所问，必须拒绝而不是列当前目录 */
-    rc = nl_parse_by_decision("看看 /var/log 里有什么", reg, &r);
-    ASSERT(rc == 0 && r.command == NULL, "带路径不兜底（否则列的是当前目录）");
+    /* 1c. 带路径的只读询问：工具由**目标类型**决定（目录→ls，文件→cat），
+     * 而不是"因为参数表只会拼字面量所以拒绝"（ADR-024 之后路径可以被表达）。 */
+    char dir[512];
+    snprintf(dir, sizeof(dir), "/tmp/nl-dec-path-XXXXXX");
+    rc = nl_parse_by_decision("看看 /tmp 里有什么", reg, &r);
+    ASSERT(rc == 0 || rc == 1, "路径询问不崩");
+    nl_parse_result_free(&r);
+
+    /* 改状态的句子仍然拒绝（只读兜底不许接） */
+    rc = nl_parse_by_decision("把 /tmp/somewhere 删掉", reg, &r);
+    ASSERT(rc == 0 && r.command == NULL, "删东西不兜底");
+    nl_parse_result_free(&r);
+    (void)dir;
 
     /* 2. 安全边界：L3 的 rm 绝不兜底 */
     rc = nl_parse_by_decision("删除 /tmp/somewhere", reg, &r);

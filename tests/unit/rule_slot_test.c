@@ -128,6 +128,34 @@ int main(void)
         PASS();
     }
 
+    /* 5c. 把字句 + 两个参数：源在动词前，目标在「到」后（ADR-024 续） */
+    TEST("把 A 挪到 B / 复制到 B");
+    {
+        static const Case c[] = {
+            { "把 a.txt 挪到 /tmp",         "mv a.txt /tmp" },
+            { "把 build 目录移到 /tmp",     "mv build /tmp" },
+            { "把 src 拷贝到 /opt/src",     "cp -r src /opt/src" },
+            { "把 error.log 复制到 backup", "cp -r error.log backup" },
+        };
+        ASSERT(check_cases("ba-two-args", c, (int)(sizeof(c) / sizeof(c[0]))) == 0,
+               "把 A 到 B");
+        PASS();
+    }
+
+    /* 5d. "A 到 B" / "A 为 B" 结构：between 取源，after_key 取目标 */
+    TEST("复制/移动/重命名 的 A 到 B");
+    {
+        static const Case c[] = {
+            { "复制 a.txt 到 /tmp",         "cp -r a.txt /tmp" },
+            { "拷贝 src 到 /tmp",           "cp -r src /tmp" },
+            { "移动 file.txt 到 /tmp",      "mv file.txt /tmp" },
+            { "重命名 old.txt 为 new.txt",  "mv old.txt new.txt" },
+        };
+        ASSERT(check_cases("between", c, (int)(sizeof(c) / sizeof(c[0]))) == 0,
+               "A 到 B");
+        PASS();
+    }
+
     /* 6. 英文命令式不受影响 */
     TEST("plain english commands unaffected");
     {

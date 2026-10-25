@@ -30,12 +30,32 @@
 #define NL_IPC_CONNECT_TIMEOUT_MS 5000
 #define NL_IPC_READ_TIMEOUT_SEC 120   /* 冷启动加载 + 慢机器上的解码；比单次推理还短就等于白扔 */
 
+/* 二进制版本戳：把可执行文件的 mtime+大小拼进 socket 名。
+ *
+ * 事故：升级 nlsh 之后，机器上还跑着**旧**的 `nlsh --serve`，客户端连上它，
+ * 于是新代码不生效 —— 表现为"改了没反应"，实测时差点把新逻辑判成没写对。
+ * socket 名带上版本戳，旧守护进程自然被晾在旧 socket 上（它自己会因空闲退出）。 */
+static void bin_stamp(char *out, size_t sz)
+{
+    out[0] = '\0';
+    char exe[512];
+    ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+    if (n <= 0) { snprintf(out, sz, "0"); return; }
+    exe[n] = '\0';
+    struct stat st;
+    if (stat(exe, &st) != 0) { snprintf(out, sz, "0"); return; }
+    snprintf(out, sz, "%llx%llx", (unsigned long long)st.st_mtime,
+             (unsigned long long)st.st_size);
+}
+
 int nl_inferd_socket_path(char *buf, size_t sz)
 {
     const char *xdg = getenv("XDG_RUNTIME_DIR");
+    char stamp[40];
+    bin_stamp(stamp, sizeof(stamp));
     int n;
-    if (xdg && *xdg) n = snprintf(buf, sz, "%s/nl-os/parse.sock", xdg);
-    else             n = snprintf(buf, sz, "/tmp/nl-os-%u/parse.sock", (unsigned)getuid());
+    if (xdg && *xdg) n = snprintf(buf, sz, "%s/nl-os/parse-%s.sock", xdg, stamp);
+    else             n = snprintf(buf, sz, "/tmp/nl-os-%u/parse-%s.sock", (unsigned)getuid(), stamp);
     return (n > 0 && (size_t)n < sz) ? 0 : -1;
 }
 

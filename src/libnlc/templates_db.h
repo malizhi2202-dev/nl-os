@@ -70,9 +70,9 @@ static const NlCmdTemplate TEMPLATES[] = {
 
     /* ── find_files ── */
     {8,  NL_INTENT_FIND_FILES, NL_PERM_L1,
-     "find . -name '{pattern}'", {"pattern", NULL}, "按名称查找"},
+     "find . -name {pattern}", {"pattern", NULL}, "按名称查找"},
     {801,NL_INTENT_FIND_FILES, NL_PERM_L1,
-     "find {location} -name '{pattern}' -type f",
+     "find {location} -name {pattern} -type f",
                                {"location", "pattern", NULL}, "在指定位置查找"},
     {802,NL_INTENT_FIND_FILES, NL_PERM_L1,
      "find {location} -size +{filter_value}",
@@ -102,9 +102,9 @@ static const NlCmdTemplate TEMPLATES[] = {
 
     /* ── search_content ── */
     {11, NL_INTENT_SEARCH_CONTENT, NL_PERM_L1,
-     "grep -rn '{pattern}' .", {"pattern", NULL}, "搜索内容"},
+     "grep -rn {pattern} .", {"pattern", NULL}, "搜索内容"},
     {1101,NL_INTENT_SEARCH_CONTENT, NL_PERM_L1,
-     "grep -rn '{pattern}' {location}", {"pattern", "location", NULL}, "在指定位置搜索"},
+     "grep -rn {pattern} {location}", {"pattern", "location", NULL}, "在指定位置搜索"},
 
     /* ── run_cmd ── */
     {12, NL_INTENT_RUN_CMD, NL_PERM_L2,
@@ -127,6 +127,10 @@ static const NlCmdTemplate TEMPLATES[] = {
      "ip -br addr",            {NULL},        "网卡、地址与状态"},
     {1402,NL_INTENT_SHOW_NETWORK, NL_PERM_L1,
      "dig +short {domain}",    {"domain", NULL}, "域名解析（A 记录）"},
+    {1403,NL_INTENT_SHOW_NETWORK, NL_PERM_L1,
+     "ip route",               {NULL},        "路由表与默认网关"},
+    {1404,NL_INTENT_SHOW_NETWORK, NL_PERM_L1,
+     "cat /etc/resolv.conf",   {NULL},        "DNS 服务器配置"},
 
     /* ── other ── */
     {0,  NL_INTENT_OTHER, NL_PERM_L1,
