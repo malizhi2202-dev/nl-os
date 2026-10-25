@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-10-25 · 终端里直接说人话（bash 钩子，不必再敲 `nlsh`）
+
+**需求**：用户原话「不想输入 nlsh，就想在机器上自己启动之后在终端直接输入自然语言啥的可以自己识别操作」。
+
+**做法**：bash 原生钩子 `command_not_found_handle` —— 只有"命令不存在"时才轮到 NL，
+`ls` / `git status` 零影响，不做别名、不抢输入、不需要常驻进程。
+
+- 新增 `scripts/nl-hook.bash`：含非 ASCII（中文）才交给 `nlsh -c`；英文未知命令仍走系统
+  `command-not-found`（`git statsu` 这类根本到不了钩子，git 自己就报了）
+- 钩子**不 eval、不解析**：确认门（ADR-019）/权限/快照/审计全在 nlsh 内，安全边界不变
+- `install_local.sh` 增 `--hook-only` / `--no-hook` / `--uninstall-hook`：写进 `~/.bashrc`
+  标记块，幂等（重复装仍一段）、首次写入前备份 `~/.bashrc.bak.nl-os`、卸载只摘块
+- 开关：`NL_SHELL_HOOK=0` 全关；`NL_SHELL_HOOK_ALL=1` 连英文未知命令也接管（默认关）
+- 验收 `scripts/verify_hook.sh`：**25 断言 0 失败**（假 nlsh 记录 argv + 临时 HOME）
+
+**真机实测**：`bash -ic '列出当前目录'` 直接列目录（10ms 执行）；`创建一个叫 X 的文件夹`
+在钩子上下文里照样弹确认门，EOF 取消则**不建目录**，`NL_ASSUME_YES=1` 才执行。
+
+**范围外（登记）**：`cd`/`export` 等 shell 内建改不了父 shell（`cli:cd` 未注册，v2 议题）；
+zsh 未做（本机无 zsh）；模型常驻另开 change。
+
+**测试自己抓出的两个 bash 真行为**：`case` 里 `[! -~]` 空格不转义会语法错误
+（且不能用 `[![:print:]]`，UTF-8 下中文算 printable）；`command_not_found_handle`
+对含 `/` 的命令名不触发。
+
 ## 2026-10-25 · 模型惰性加载：规则能决定的命令不再加载 428MB 模型
 
 **问题**：`nlsh` 对任何非传统命令都在启动时加载模型，哪怕规则层一句话就能决定。

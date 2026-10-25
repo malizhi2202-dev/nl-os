@@ -48,6 +48,29 @@ mkdir build && cd build && cmake .. && make -j$(nproc)
   在 2 核机器上也不会打满 CPU。
 - 交互式中文输入不再被吞（行编辑器支持 UTF-8，管道输入走独立读取路径）。
 
+## 终端里直接说人话（bash 钩子）
+
+装一次，之后**开终端就能说中文**，不用想起 `nlsh`：
+
+```bash
+bash scripts/install_local.sh          # 装程序 + 把钩子写进 ~/.bashrc 的标记块
+# 新开一个终端：
+列出当前目录                            # ← 直接这么打
+创建一个叫 demo 的文件夹                  # ← 会问一次确认（ADR-019），然后执行
+```
+
+- 原理是 bash 原生钩子 `command_not_found_handle`：**只有"命令不存在"时才轮到 NL**，
+  `ls` / `git status` 等真命令零影响，不做别名、不抢输入。
+- 只接管**含中文（非 ASCII）**的输入；英文未知命令仍走系统 `command-not-found`
+  （`git statsu` 这种拼错更到不了这里——git 自己就报了）。
+- 钩子本身**不 eval、不解析**，一律原样交给 `nlsh -c`：确认门/权限/快照/审计全在 nlsh 里。
+- 开关：`NL_SHELL_HOOK=0` 完全关闭；`NL_SHELL_HOOK_ALL=1` 连英文未知命令也接管（默认关）。
+- 卸载：`bash scripts/install_local.sh --uninstall-hook`（只摘标记块，其它行不动；
+  首次安装前已备份 `~/.bashrc.bak.nl-os`）。
+- 已知边界：`cd` / `export` 这类 **shell 内建**改不了父 shell，`进入 xx 目录` 目前会提示
+  "本机没有该能力：cli:cd"（v2 议题）；规则未命中的句子仍是约 1.9s 冷启动。
+- 验收：`bash scripts/verify_hook.sh`（25 条断言，用假 nlsh + 临时 HOME，不动你的 `~/.bashrc`）。
+
 
 ## 本地 broker（CIP v1）
 
