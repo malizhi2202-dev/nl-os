@@ -94,3 +94,15 @@ NlBudgetVerdict nl_budget_check(const char *input, const NlCapRegistry *r,
     fill_alternatives(r, detail);
     return NL_BUDGET_REFUSE;
 }
+
+const char *nl_budget_dim_str(NlBudgetDim d)
+{
+    switch (d) {
+    case NL_DIM_NONE:          return "none";
+    case NL_DIM_TOO_MANY_CAPS: return "跨能力过多";
+    case NL_DIM_COMPOSITE:     return "复合语义";
+    case NL_DIM_PRIVILEGE:     return "需要特权";
+    case NL_DIM_UNKNOWN_CAP:   return "能力不存在";
+    default:                   return "unknown";
+    }
+}

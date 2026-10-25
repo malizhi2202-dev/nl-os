@@ -50,7 +50,7 @@ static void test_scan_basic(void)
     int added = nl_cap_scan_dirs(dirs, 1, r);
     ASSERT(added == 3, "should add 3 entries from dir a");
 
-    const NlCapability *ls = nl_cap_find(r, "ls");
+    const NlCapability *ls = nl_cap_find(r, "cli:ls");
     ASSERT(ls != NULL, "ls not registered");
     ASSERT(ls->trusted == 1, "regular file must be trusted");
     ASSERT(ls->kind == NL_CAP_KIND_FILE, "ls kind must be file");
@@ -58,12 +58,12 @@ static void test_scan_basic(void)
     ASSERT(strstr(ls->path, "/a/ls") != NULL, "path should be realpath in dir a");
     ASSERT(ls->inode != 0, "inode should be recorded");
 
-    const NlCapability *lk = nl_cap_find(r, "linkx");
+    const NlCapability *lk = nl_cap_find(r, "cli:linkx");
     ASSERT(lk != NULL, "symlink not registered");
     ASSERT(lk->trusted == 0, "symlink must be untrusted");
     ASSERT(lk->kind == NL_CAP_KIND_SYMLINK, "linkx kind must be symlink");
 
-    const NlCapability *unk = nl_cap_find(r, "zzz-tool");
+    const NlCapability *unk = nl_cap_find(r, "cli:zzz-tool");
     ASSERT(unk != NULL, "unknown tool not registered");
     ASSERT(unk->perm_level == 4, "unregistered capability must default to L4");
 
@@ -88,11 +88,11 @@ static void test_id_conflict_suffix(void)
     for (int i = 0; i < nl_cap_count(r); i++) {
         const NlCapability *c = nl_cap_at(r, i);
         ASSERT(c != NULL, "nl_cap_at returned NULL");
-        if (strncmp(c->id, "ls", 2) != 0) continue;
+        if (strncmp(c->id, "cli:ls", 6) != 0) continue;
         if (strchr(c->id, '@') != NULL) {
             suffixed++;
             if (strstr(c->path, "/b/ls") != NULL) suffixed_in_b = 1;
-        } else if (strcmp(c->id, "ls") == 0) {
+        } else if (strcmp(c->id, "cli:ls") == 0) {
             plain++;
         }
     }
@@ -101,7 +101,7 @@ static void test_id_conflict_suffix(void)
     ASSERT(suffixed_in_b == 1, "suffixed entry should point at dir b");
 
     /* 冲突后的 id 仍可被 find 命中 */
-    ASSERT(nl_cap_find(r, "ls") != NULL, "plain ls still findable");
+    ASSERT(nl_cap_find(r, "cli:ls") != NULL, "plain ls still findable");
 
     nl_cap_free(r);
     PASS();

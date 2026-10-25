@@ -175,7 +175,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on>T02,T03</depends_on>
 </task>
 
-<task id="T06" parallel="true" status="pending" auto="true">
+<task id="T06" parallel="true" status="done" auto="true">
   <name>audit_log + 快路径审计（fast_path=true）</name>
   <read_files>
     .specs/nl-capability-runtime/DESIGN.md
@@ -200,7 +200,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on>T01</depends_on>
 </task>
 
-<task id="T07" parallel="true" status="pending" auto="true">
+<task id="T07" parallel="true" status="done" auto="true">
   <name>能力缺失 / 快路径判定接入 nlsh，拒绝输出替代步骤</name>
   <read_files>
     .specs/nl-capability-runtime/REQUIREMENT.md
@@ -225,7 +225,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on>T03,T05,T06</depends_on>
 </task>
 
-<task id="T08" parallel="false" status="pending" auto="false">
+<task id="T08" parallel="false" status="done" auto="false">
   <name>🔒 段 1 集成验证 + 注册表格式冻结签核</name>
   <read_files>
     .specs/nl-capability-runtime/REQUIREMENT.md
@@ -235,6 +235,8 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <write_files>
     .specs/nl-capability-runtime/SEGMENT1-FREEZE.md
     scripts/verify_segment1.sh
+    src/libnlc/capability_scan.c   <!-- 扩范围：统一 cli: 前缀（ID 不一致的集成缺陷） -->
+    tests/unit/capability_scan_test.c
   </write_files>
   <action>
     1. 写 `scripts/verify_segment1.sh`：一键跑 AC-1~AC-5 的 5 条验证（扫描零写、三档分类、快路径、能力缺失、预算拒绝）

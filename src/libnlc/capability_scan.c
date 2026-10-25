@@ -97,13 +97,20 @@ int nl_cap_scan_dirs(const char *const *dirs, int n, NlCapRegistry *out)
 
             NlCapability c;
             memset(&c, 0, sizeof(c));
-            snprintf(c.id, sizeof(c.id), "%.127s", e->d_name);
+            /* 能力 ID 带命名空间前缀（与 CIP / dispatch 的消费格式一致） */
+            size_t name_len = strlen(e->d_name);
+            size_t room = sizeof(c.id) - 5;            /* "cli:" + name + NUL */
+            if (name_len > room) name_len = room;
+            memcpy(c.id, "cli:", 4);
+            memcpy(c.id + 4, e->d_name, name_len);
+            c.id[4 + name_len] = '\0';
             snprintf(c.name, sizeof(c.name), "%.127s", e->d_name);
             c.kind = S_ISLNK(st.st_mode) ? NL_CAP_KIND_SYMLINK : NL_CAP_KIND_FILE;
             c.trusted = (c.kind == NL_CAP_KIND_FILE) ? 1 : 0;
             c.inode = (unsigned long)st.st_ino;
             c.perm_level = nl_cap_perm_for(e->d_name);
             c.source = (char *)"scan";
+            snprintf(c.namespace, sizeof(c.namespace), "cli");
 
             /* 普通文件登记 realpath；符号链接登记字面路径（保留指向关系供人查看） */
             char rp[PATH_MAX];
@@ -118,9 +125,13 @@ int nl_cap_scan_dirs(const char *const *dirs, int n, NlCapRegistry *out)
             if (nl_cap_find(out, c.id) != NULL) {
                 char suf[9];
                 fnv8(full, suf);
-                char newid[NL_CAP_MAX_ID_LEN];
-                snprintf(newid, sizeof(newid), "%.118s@%s", e->d_name, suf);
-                snprintf(c.id, sizeof(c.id), "%s", newid);
+                size_t room2 = sizeof(c.id) - 5 - strlen(suf);
+                size_t keep = name_len;
+                if (keep > room2) keep = room2;
+                memcpy(c.id, "cli:", 4);
+                memcpy(c.id + 4, e->d_name, keep);
+                c.id[4 + keep] = '@';
+                memcpy(c.id + 5 + keep, suf, strlen(suf) + 1);
                 if (nl_cap_find(out, c.id) != NULL) {
                     free(c.path);
                     continue;

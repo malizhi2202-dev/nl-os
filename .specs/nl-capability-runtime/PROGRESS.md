@@ -20,9 +20,9 @@
 |---|---|---|
 | T04 | `capability_selftest` 三档分类 | ✅ 完成（2026-10-25，2/2） |
 | T05 | `budget` 规则版复杂度预算 + refused + 替代 | ✅ 完成（2026-10-25，3/3） |
-| T06 | `audit` JSONL + 快路径审计（fast_path=true） | 骨架已有，逻辑未实现 |
-| T07 | 能力缺失 / 预算拒绝接入 `nlsh` + `--scan` / `--self-test` 接线 | 未开始 |
-| T08 | 🔒 段 1 集成 + **注册表格式冻结签核**（auto=false，人审门） | 未开始，**新 change 的硬依赖** |
+| T06 | 快路径 + 审计 fast_path | ✅ 完成 |
+| T07 | 能力缺失/预算拒绝接入 nlsh + scan/self-test | ✅ 完成 |
+| T08 | 段 1 集成 + 冻结引用 | ✅ 完成（格式已由 capability-protocol 冻结为 v2） |
 
 ## 已排除方案（恢复时不要重试）
 

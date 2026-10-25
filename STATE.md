@@ -7,9 +7,9 @@
 ## 当前位置
 
 - **活跃 Change**: 无（`capability-protocol` 已完成并归档）
-- **活跃 Change**: `nl-capability-runtime`（已恢复；T01–T05 完成，下一任务 T06 快路径审计）
-- **当前阶段**: DEV（nl-capability-runtime 段 1 收尾）
-- **当前 Task**: `T06`（快路径 + 审计 fast_path）
+- **活跃 Change**: `nl-capability-runtime`（**段 1 全部完成** T01–T08；段 2 决策层 / 段 3 固化未开始）
+- **当前阶段**: DEV（段 1 完成；段 2 待启动）
+- **当前 Task**: 段 2 规划（决策层后端）
 - **中断任务**（来自 R1.5 清窗）: 无（T06–T08 即将继续）
 - **会话开始建议**:
   - 恢复历史 → `@.specs/archive/2026-10-25-capability-protocol/`（CHANGE/REQUIREMENT/DESIGN/TASK/TEST/REVIEW/UAT + 14 个 SUMMARY）

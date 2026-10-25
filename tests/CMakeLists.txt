@@ -204,3 +204,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_http_test.c)
     target_link_libraries(test_adapter_http PRIVATE nlc)
     add_test(NAME adapter_http COMMAND test_adapter_http)
 endif()
+
+# 能力存在性/预算拒绝/快路径（T06+T07 · nl-capability-runtime）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/capability_refuse_test.c)
+    add_executable(test_capability_refuse unit/capability_refuse_test.c)
+    target_include_directories(test_capability_refuse PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlsh ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_capability_refuse PRIVATE nlc cjson)
+    add_test(NAME capability_refuse COMMAND test_capability_refuse)
+endif()
