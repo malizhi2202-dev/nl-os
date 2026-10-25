@@ -71,6 +71,19 @@ static const NlRule RULES[] = {
      {{"name", "after_key", "叫"}, {NULL}},
      "创建个叫 backup 的目录"},
 
+    {9,  NL_INTENT_CREATE_DIR, 1,
+     {"建立", "个", "文件夹", NULL},
+     {{"name", "after_key", "叫"}, {NULL}},
+     "建立个叫 backup 的文件夹"},
+    {9,  NL_INTENT_CREATE_DIR, 1,
+     {"建", "文件夹", NULL},
+     {{"name", "after_key", "建"}, {NULL}},
+     "建一个 logs 文件夹"},
+    {9,  NL_INTENT_CREATE_DIR, 1,
+     {"建", "目录", NULL},
+     {{"name", "after_key", "建"}, {NULL}},
+     "建一个 logs 目录"},
+
     /* ── create_file · 创建文件 ── */
     {10, NL_INTENT_CREATE_FILE, 2,
      {"创建", "文件", NULL},
@@ -92,6 +105,11 @@ static const NlRule RULES[] = {
      {"写入", "文件", NULL},
      {{"name", "after_key", "到"}, {NULL}},
      "写入 hello 到 test.txt"},
+
+    {15, NL_INTENT_CREATE_FILE, 2,
+     {"生成", "文件", NULL},
+     {{"name", "after_key", "叫"}, {NULL}},
+     "生成一个叫 src 的文件"},
 
     /* ── delete · 删除 ── */
     {20, NL_INTENT_DELETE, 3,
@@ -189,6 +207,19 @@ static const NlRule RULES[] = {
      {{NULL}},
      "显示目录结构"},
 
+    {58, NL_INTENT_LIST_DIR, 6,
+     {"查看", "当前目录", NULL},
+     {{NULL}},
+     "查看当前目录内容"},
+    {58, NL_INTENT_LIST_DIR, 6,
+     {"列出", "内容", NULL},
+     {{"location", "after_key", "列出"}, {NULL}},
+     "列出 /home 下的内容"},
+    {58, NL_INTENT_LIST_DIR, 6,
+     {"哪些", "文件", NULL},
+     {{NULL}},
+     "当前目录有哪些文件"},
+
     /* ── view_file · 查看文件 ── */
     {60, NL_INTENT_VIEW_FILE, 7,
      {"查看", "文件", NULL},
@@ -210,6 +241,19 @@ static const NlRule RULES[] = {
      {"看看", "内容", NULL},
      {{"target", "after_key", "看看"}, {NULL}},
      "看看 error.log 的内容"},
+
+    {65, NL_INTENT_VIEW_FILE, 7,
+     {"查看", "内容", NULL},
+     {{"target", "after_key", "查看"}, {NULL}},
+     "查看 README.md 的内容"},
+    {65, NL_INTENT_VIEW_FILE, 7,
+     {"打印", "内容", NULL},
+     {{"target", "after_key", "打印"}, {NULL}},
+     "打印 backup 的内容"},
+    {65, NL_INTENT_VIEW_FILE, 7,
+     {"读取", NULL},
+     {{"target", "after_key", "读取"}, {NULL}},
+     "读取 data"},
 
     /* ── find_files · 查找文件 ── */
     {70, NL_INTENT_FIND_FILES, 8,
@@ -263,6 +307,15 @@ static const NlRule RULES[] = {
      {{NULL}},
      "返回上级目录"},
 
+    {86, NL_INTENT_CHANGE_DIR, 9,
+     {"进入", NULL},
+     {{"location", "after_key", "进入"}, {NULL}},
+     "进入 /home"},
+    {86, NL_INTENT_CHANGE_DIR, 9,
+     {"到", "目录", NULL},
+     {{"location", "after_key", "到"}, {NULL}},
+     "到 logs 目录下"},
+
     /* ── show_process · 进程查看 ── */
     {90, NL_INTENT_SHOW_PROCESS, 10,
      {"显示", "进程", NULL},
@@ -300,6 +353,11 @@ static const NlRule RULES[] = {
      {"运行", "程序", NULL},
      {{NULL}},
      "显示正在运行的程序"},
+
+    {98, NL_INTENT_SHOW_PROCESS, 10,
+     {"进程", NULL},
+     {{NULL}},
+     "列出进程"},
 
     /* ── search_content · 搜索内容 ── */
     {100, NL_INTENT_SEARCH_CONTENT, 11,

@@ -39,6 +39,25 @@ double nl_choose_min_conf(void)
     return NL_MIN_CONF_DEFAULT;
 }
 
+/* 规则层有把握时不必问模型：top-1 领先次优 >= margin（默认 20）视为"已确定"。
+ * 依据：规则意图提示是 +50，词典命中只有 +8/+10；合并后实测 top-1 准确率 98.8%，
+ * 而模型在"规则也没把握"的少数样本上并没有更好。NL_DECIDE_MARGIN 可调（0=总是问模型）。 */
+static int rule_confident_margin(void)
+{
+    const char *env = getenv("NL_DECIDE_MARGIN");
+    if (env && env[0]) {
+        int v = atoi(env);
+        if (v >= 0 && v <= 100) return v;
+    }
+    return 20;
+}
+
+int nl_choose_solo_decode(void)
+{
+    const char *env = getenv("NL_DECIDE_SOLO_DECODE");
+    return (env && env[0] == '1') ? 1 : 0;
+}
+
 size_t nl_total_ram_bytes(void)
 {
     FILE *f = fopen("/proc/meminfo", "r");
@@ -149,6 +168,19 @@ NlChoiceStatus nl_choose_with_model(NlModel *m, const char *input,
 {
     if (!m || !input || !c || !chosen || cap == 0) return NL_CHOICE_ERR;
     if (c->count <= 0) return NL_CHOICE_ERR;
+
+    /* 规则已经确定时不问模型：单候选（唯一可选）或 top-1 明显领先 */
+    int decisive = (c->count == 1);
+    if (!decisive && c->count >= 2) {
+        int margin = rule_confident_margin();
+        if (margin > 0 && c->items[0].score - c->items[1].score >= margin) decisive = 1;
+    }
+    if (decisive && !nl_choose_solo_decode()) {
+        size_t n = strlen(c->items[0].id);
+        if (n >= cap) return NL_CHOICE_ERR;
+        memcpy(chosen, c->items[0].id, n + 1);
+        return NL_CHOICE_OK;
+    }
 
     char grammar[NL_GRAMMAR_CAP];
     if (nl_decide_grammar(c, grammar, sizeof(grammar)) < 0) return NL_CHOICE_ERR;

@@ -223,6 +223,14 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/decision_test.c)
     add_test(NAME decision COMMAND test_decision)
 endif()
 
+# 槽位抽取回归（T13 段 2 · extract_after_key_long 的守卫）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/rule_slot_test.c)
+    add_executable(test_rule_slot unit/rule_slot_test.c)
+    target_include_directories(test_rule_slot PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_rule_slot PRIVATE nlc)
+    add_test(NAME rule_slot COMMAND test_rule_slot)
+endif()
+
 # 中文评测集（T13 · nl-capability-runtime 段 2）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/benchmark_test.c)
     add_executable(test_benchmark unit/benchmark_test.c)

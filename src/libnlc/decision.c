@@ -2,6 +2,7 @@
  * decision.c — 决策层的模型无关部分（T10/T11/T12）
  */
 #include "decision.h"
+#include "rule_engine.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -82,6 +83,25 @@ bubble:
     }
 }
 
+/* 规则层意图 → 默认能力（与 nlsh -c 的执行路径保持同一判断，避免"能执行但选不出来"）。
+ * change_dir 是 shell 内建、run_cmd/other 没有单一能力，这三类不出提示。 */
+static const char *cap_for_intent(NlIntentType intent)
+{
+    switch (intent) {
+    case NL_INTENT_CREATE_DIR:     return "cli:mkdir";
+    case NL_INTENT_CREATE_FILE:    return "cli:touch";
+    case NL_INTENT_DELETE:         return "cli:rm";
+    case NL_INTENT_LIST_DIR:       return "cli:ls";
+    case NL_INTENT_VIEW_FILE:      return "cli:cat";
+    case NL_INTENT_FIND_FILES:     return "cli:find";
+    case NL_INTENT_SHOW_PROCESS:   return "cli:ps";
+    case NL_INTENT_MOVE:           return "cli:mv";
+    case NL_INTENT_COPY:           return "cli:cp";
+    case NL_INTENT_SEARCH_CONTENT: return "cli:grep";
+    default:                       return NULL;
+    }
+}
+
 int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidates *out)
 {
     if (!input || !reg || !out) return -1;
@@ -89,6 +109,18 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
 
     int total = nl_cap_count(reg);
     out->total_scanned = total;
+
+    /* 规则层先判一次：命中的意图给出强提示（+50），远高于词典的 +8/+10。
+     * 这样"能执行的说法"与"决策层选得出来的说法"是同一套判断。 */
+    NlRuleResult rr;
+    if (nl_rule_match(input, &rr) == 0) {
+        const char *hint = cap_for_intent(rr.intent);
+        if (hint && nl_cap_find(reg, hint)) {
+            const NlCapability *hc = nl_cap_find(reg, hint);
+            if (hc && hc->perm_level < 4) offer(out, hint, 50);
+        }
+        nl_rule_result_free(&rr);
+    }
 
     for (int i = 0; i < total; i++) {
         const NlCapability *c = nl_cap_at(reg, i);

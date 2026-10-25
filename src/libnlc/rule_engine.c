@@ -73,6 +73,53 @@ static char *extract_after_key(const char *input, const char *key) {
     return strndup(pos, end - pos);
 }
 
+/* 句尾修饰后缀：`创建一个叫 demo 的文件夹` 的目标是 demo，不是 `demo 的文件夹`。
+ * 只在一个"结构词"前面剥离：要么后缀以 `的` 开头（`的文件夹`），
+ * 要么后缀前是空白（`README.md 文件`）——否则 `删除 旧文件` 会被啃成 `旧`。 */
+static const char *const SLOT_SUFFIXES[] = {
+    "的内容", "的文件", "的目录", "的文件夹", "的文件名", "的名称",
+    /* 组合形式必须排在前面：`logs 目录下` 要先匹配 `目录下` 才轮不到 `下` */
+    "文件夹下面", "文件夹里", "文件夹下", "文件夹中",
+    "目录下面", "目录里", "目录下", "目录中",
+    "文件夹", "目录", "文件", "内容", "名字", "下面", "下", "里面", "里", "中", NULL
+};
+static const char *const SLOT_SUFFIX_ALWAYS[] = {
+    "的内容", "的文件", "的目录", "的文件夹", "的文件名", "的名称", NULL
+};
+
+/* 去掉两侧空白与句末标点 */
+static size_t trim_slot_span(const char *s, size_t len) {
+    while (len > 0 && isspace((unsigned char)s[len - 1])) len--;
+    while (len > 0 && (s[len - 1] == '\'' || s[len - 1] == ',' || s[len - 1] == '.' ||
+                       (unsigned char)s[len - 1] >= 0x80)) {
+        /* 中文标点：。，！？； 的 UTF-8 尾字节也 >=0x80，这里只在明确是标点时截断 */
+        if ((unsigned char)s[len - 1] == 0x82 && len >= 3 && (unsigned char)s[len - 2] == 0x80 &&
+            ((unsigned char)s[len - 3] == 0xA1 || (unsigned char)s[len - 3] == 0xEF)) { len -= 3; continue; }
+        break;
+    }
+    return len;
+}
+
+/* 去掉包裹的引号（"x" / 'x' / “x”） */
+static char *strip_wrapping_quotes(const char *s) {
+    size_t len = strlen(s);
+    if (len >= 2) {
+        const char *open = s;
+        const char *close = s + len - 1;
+        int quoted = (open[0] == '"' && close[0] == '"') || (open[0] == '\'' && close[0] == '\'');
+        /* 中文引号恒为 3 字节： “ ” ‘ ’ */
+        if (!quoted && len >= 6) {
+            int o3 = (unsigned char)open[0] == 0xE2 && (unsigned char)open[1] == 0x80 &&
+                     ((unsigned char)open[2] == 0x9C || (unsigned char)open[2] == 0x98);
+            int c3 = (unsigned char)close[-2] == 0xE2 && (unsigned char)close[-1] == 0x80 &&
+                     ((unsigned char)close[0] == 0x9D || (unsigned char)close[0] == 0x99);
+            if (o3 && c3) return strndup(s + 3, len - 6);
+        }
+        if (quoted) return strndup(s + 1, len - 2);
+    }
+    return strdup(s);
+}
+
 /* 查找关键词后的内容（如 "删除" 后面的剩余内容作为 target） */
 static char *extract_after_key_long(const char *input, const char *key) {
     if (!input || !key) return NULL;
@@ -81,8 +128,69 @@ static char *extract_after_key_long(const char *input, const char *key) {
     pos += strlen(key);
     while (*pos && isspace((unsigned char)*pos)) pos++;
     if (!*pos) return NULL;
-    /* 取到句尾（或下一个关键词） */
-    return strdup(pos);
+
+    char *work = strip_wrapping_quotes(pos);
+    if (!work) return NULL;
+
+    /* 反复剥离后缀，直到不再变化 */
+    for (int guard = 0; guard < 4; guard++) {
+        size_t len = trim_slot_span(work, strlen(work));
+        work[len] = '\0';
+        int stripped = 0;
+
+        for (int i = 0; SLOT_SUFFIX_ALWAYS[i]; i++) {
+            size_t sl = strlen(SLOT_SUFFIX_ALWAYS[i]);
+            if (len > sl && strcmp(work + len - sl, SLOT_SUFFIX_ALWAYS[i]) == 0) {
+                work[len - sl] = '\0';
+                stripped = 1;
+                break;
+            }
+        }
+        if (!stripped) {
+            for (int i = 0; SLOT_SUFFIXES[i]; i++) {
+                size_t sl = strlen(SLOT_SUFFIXES[i]);
+                if (len <= sl || strcmp(work + len - sl, SLOT_SUFFIXES[i]) != 0) continue;
+                /* 后缀前必须是空白，避免把 `旧文件` 啃成 `旧` */
+                if (!isspace((unsigned char)work[len - sl - 1])) continue;
+                work[len - sl] = '\0';
+                stripped = 1;
+                break;
+            }
+        }
+        if (!stripped) {
+            /* 结尾单独的 `的` 也去掉（`叫 x 的`） */
+            size_t dl = strlen("的");
+            if (len > dl && strcmp(work + len - dl, "的") == 0 &&
+                isspace((unsigned char)work[len - dl - 1])) {
+                work[len - dl] = '\0';
+                stripped = 1;
+            }
+        }
+        if (!stripped) break;
+    }
+
+    size_t final_len = trim_slot_span(work, strlen(work));
+    while (final_len > 0 && isspace((unsigned char)work[final_len - 1])) final_len--;
+    if (final_len == 0) { free(work); return NULL; }
+    work[final_len] = '\0';
+
+    /* 前导量词/介绍词：`建一个 logs 文件夹` 的目标是 logs */
+    static const char *const LEAD_WORDS[] = { "一个", "叫做", "名为", "叫", "个", NULL };
+    for (int i = 0; LEAD_WORDS[i]; i++) {
+        size_t ll = strlen(LEAD_WORDS[i]);
+        size_t cur = strlen(work);
+        if (cur > ll && strncmp(work, LEAD_WORDS[i], ll) == 0 &&
+            (isspace((unsigned char)work[ll]) || (unsigned char)work[ll] >= 0x80)) {
+            memmove(work, work + ll, cur - ll + 1);
+            while (isspace((unsigned char)work[0])) memmove(work, work + 1, strlen(work));
+            break;
+        }
+    }
+
+    char *out = strip_wrapping_quotes(work);
+    free(work);
+    if (out && out[0] == '\0') { free(out); return NULL; }
+    return out;
 }
 
 /* ============================================================

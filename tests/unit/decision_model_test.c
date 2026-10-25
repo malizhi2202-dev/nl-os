@@ -170,105 +170,106 @@ int main(void)
     PASS();
 
     /* ── 4. 有模型则评测 ── */
-    TEST("constrained choice accuracy and latency (needs NL_MODEL_PATH)");
-    const char *model_path = getenv("NL_MODEL_PATH");
-    if (!model_path || !model_path[0]) { SKIP("NL_MODEL_PATH unset"); }
-    else {
-        NlModel *m = nl_model_init(model_path);
-        if (!m) { SKIP("model not loadable"); }
-        else {
-            long blen = 0;
-            char *raw = read_file(BENCHMARK_PATH, &blen);
-            ASSERT(raw != NULL, "benchmark file unreadable");
-            cJSON *arr = cJSON_Parse(raw);
-            free(raw);
-            ASSERT(arr != NULL && cJSON_IsArray(arr), "benchmark JSON invalid");
+    TEST("candidate funnel and (optionally) constrained choice");
+    {
+        const char *model_path = getenv("NL_MODEL_PATH");
+        NlModel *m = NULL;
+        if (model_path && model_path[0]) m = nl_model_init(model_path);
 
-            NlCapRegistry *real = nl_cap_load(nl_cap_default_path(), NULL);
-            NlCapRegistry *reg = real ? real : synthetic_registry();
-            ASSERT(reg != NULL, "no registry available");
+        long blen = 0;
+        char *raw = read_file(BENCHMARK_PATH, &blen);
+        ASSERT(raw != NULL, "benchmark file unreadable");
+        cJSON *arr = cJSON_Parse(raw);
+        free(raw);
+        ASSERT(arr != NULL && cJSON_IsArray(arr), "benchmark JSON invalid");
 
-            int total = cJSON_GetArraySize(arr);
-            int decidable = 0, hit = 0, miss = 0, rule_ok = 0;
-            int model_calls = 0, model_ok = 0, model_refuse = 0, model_err = 0;
-            int outside = 0, cand_sum = 0;
-            double lat[512];
-            int nlat = 0;
+        NlCapRegistry *real = nl_cap_load(nl_cap_default_path(), NULL);
+        NlCapRegistry *reg = real ? real : synthetic_registry();
+        ASSERT(reg != NULL, "no registry available");
 
-            for (int i = 0; i < total; i++) {
-                cJSON *e = cJSON_GetArrayItem(arr, i);
-                const char *inv = cJSON_GetStringValue(cJSON_GetObjectItem(e, "input"));
-                const char *want = cJSON_GetStringValue(cJSON_GetObjectItem(e, "intent"));
-                if (!inv || !want) continue;
-                const char *want_cap = cap_for_intent(want);
-                if (!want_cap) continue;   /* change_dir / run_cmd / other 无法用单一能力判定 */
-                decidable++;
+        int total = cJSON_GetArraySize(arr);
+        int decidable = 0, hit = 0, miss = 0, rule_ok = 0;
+        int model_calls = 0, model_ok = 0, model_refuse = 0, model_err = 0;
+        int outside = 0, cand_sum = 0;
+        double lat[512];
+        int nlat = 0;
 
-                NlCandidates c;
-                ASSERT(nl_decide_candidates(inv, reg, &c) == 0, "candidate narrowing failed");
-                cand_sum += c.count;
+        for (int i = 0; i < total; i++) {
+            cJSON *e = cJSON_GetArrayItem(arr, i);
+            const char *inv = cJSON_GetStringValue(cJSON_GetObjectItem(e, "input"));
+            const char *want = cJSON_GetStringValue(cJSON_GetObjectItem(e, "intent"));
+            if (!inv || !want) continue;
+            const char *want_cap = cap_for_intent(want);
+            if (!want_cap) continue;   /* change_dir / run_cmd / other 无法用单一能力判定 */
+            decidable++;
 
-                int want_idx = -1;
+            NlCandidates c;
+            ASSERT(nl_decide_candidates(inv, reg, &c) == 0, "candidate narrowing failed");
+            cand_sum += c.count;
+
+            int want_idx = -1;
+            for (int k = 0; k < c.count; k++)
+                if (strcmp(c.items[k].id, want_cap) == 0) want_idx = k;
+            if (want_idx < 0) { miss++; continue; }   /* 漏救：正确能力没进 top-K */
+            hit++;
+
+            if (c.count > 0 && strcmp(c.items[0].id, want_cap) == 0) rule_ok++;
+
+            if (!m) continue;
+
+            double t0 = now_ms();
+            char chosen[NL_CAP_MAX_ID_LEN];
+            NlChoiceStatus st = nl_choose_with_model(m, inv, &c, chosen, sizeof(chosen));
+            double dt = now_ms() - t0;
+            model_calls++;
+            if (nlat < (int)(sizeof(lat) / sizeof(lat[0]))) lat[nlat++] = dt;
+
+            if (st == NL_CHOICE_OK) {
+                int in = 0;
                 for (int k = 0; k < c.count; k++)
-                    if (strcmp(c.items[k].id, want_cap) == 0) want_idx = k;
-                if (want_idx < 0) { miss++; continue; }   /* 漏救：正确能力没进 top-K */
-                hit++;
-
-                if (c.count > 0 && strcmp(c.items[0].id, want_cap) == 0) rule_ok++;
-
-                double t0 = now_ms();
-                char chosen[NL_CAP_MAX_ID_LEN];
-                NlChoiceStatus st = nl_choose_with_model(m, inv, &c, chosen, sizeof(chosen));
-                double dt = now_ms() - t0;
-                model_calls++;
-                if (nlat < (int)(sizeof(lat) / sizeof(lat[0]))) lat[nlat++] = dt;
-
-                if (st == NL_CHOICE_OK) {
-                    /* 安全性质：输出必须是候选之一 */
-                    int in = 0;
-                    for (int k = 0; k < c.count; k++)
-                        if (strcmp(c.items[k].id, chosen) == 0) in = 1;
-                    if (!in) outside++;
-                    if (strcmp(chosen, want_cap) == 0) model_ok++;
-                } else if (st == NL_CHOICE_REFUSE) {
-                    model_refuse++;
-                } else {
-                    model_err++;
-                }
+                    if (strcmp(c.items[k].id, chosen) == 0) in = 1;
+                if (!in) outside++;      /* 安全性质：输出必须是候选之一 */
+                if (strcmp(chosen, want_cap) == 0) model_ok++;
+            } else if (st == NL_CHOICE_REFUSE) {
+                model_refuse++;
+            } else {
+                model_err++;
             }
-
-            cJSON_Delete(arr);
-            if (real) nl_cap_free(real); else nl_cap_free(reg);
-
-            double p50 = 0.0, p95 = 0.0;
-            if (nlat > 0) {
-                qsort(lat, (size_t)nlat, sizeof(double), cmp_double);
-                p50 = lat[nlat / 2];
-                p95 = lat[(int)(0.95 * (double)(nlat - 1))];
-            }
-
-            printf("\n  [decidable %d/%d · 粗筛命中 %d · 漏救 %d (%.1f%%)"
-                   " · 平均候选 %.2f · rule top-1 %d/%d = %.1f%%"
-                   " · choice %d/%d = %.1f%% (refuse %d err %d)"
-                   " · P50 %.0fms P95 %.0fms]\n ",
-                   decidable, total, hit, miss,
-                   decidable ? 100.0 * miss / decidable : 0.0,
-                   decidable ? (double)cand_sum / decidable : 0.0,
-                   rule_ok, hit, hit ? 100.0 * rule_ok / hit : 0.0,
-                   model_ok, model_calls,
-                   model_calls ? 100.0 * model_ok / model_calls : 0.0,
-                   model_refuse, model_err, p50, p95);
-
-            /* 硬性质：模型永不输出候选外的东西（越界即失败） */
-            ASSERT(outside == 0, "choice returned an id outside the candidate set");
-            /* 硬性质：绝大多数用例不能解码失败 */
-            ASSERT(model_calls > 0 && model_err * 10 <= model_calls,
-                   "too many decode failures");
-            /* 观测门槛（松）：至少不能比随机差得离谱 */
-            ASSERT(model_ok * 100 >= model_calls * 20, "accuracy below sanity threshold");
-            PASS();
-            nl_model_free(m);
         }
+
+        cJSON_Delete(arr);
+        if (real) nl_cap_free(real); else nl_cap_free(reg);
+
+        double p50 = 0.0, p95 = 0.0;
+        if (nlat > 0) {
+            qsort(lat, (size_t)nlat, sizeof(double), cmp_double);
+            p50 = lat[nlat / 2];
+            p95 = lat[(int)(0.95 * (double)(nlat - 1))];
+        }
+
+        printf("\n  [可判定 %d/%d · 粗筛命中 %d · 漏救 %d (%.1f%%) · 平均候选 %.2f"
+               " · rule top-1 %d/%d = %.1f%%",
+               decidable, total, hit, miss,
+               decidable ? 100.0 * miss / decidable : 0.0,
+               decidable ? (double)cand_sum / decidable : 0.0,
+               rule_ok, hit, hit ? 100.0 * rule_ok / hit : 0.0);
+        if (model_calls > 0)
+            printf(" · choice %d/%d = %.1f%% (refuse %d err %d) · P50 %.0fms P95 %.0fms",
+                   model_ok, model_calls, 100.0 * model_ok / model_calls,
+                   model_refuse, model_err, p50, p95);
+        printf("]\n ");
+
+        /* 门槛：召回与规则 top-1 都要有底线，防止悄悄退化 */
+        ASSERT(decidable >= 90, "decidable set too small");
+        ASSERT(hit * 100 >= decidable * 80, "coarse-screen recall below 80%");
+        ASSERT(rule_ok * 100 >= hit * 85, "rule top-1 below 85% on hit set");
+        if (model_calls > 0) {
+            ASSERT(outside == 0, "choice returned an id outside the candidate set");
+            ASSERT(model_err * 10 <= model_calls, "too many decode failures");
+            ASSERT(model_ok * 100 >= model_calls * 20, "accuracy below sanity threshold");
+        }
+        if (m) nl_model_free(m);
+        PASS();
     }
 
     printf("\n%d/%d passed, %d failed\n", tests_passed, tests_run, tests_failed);

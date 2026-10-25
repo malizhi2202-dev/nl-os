@@ -38,8 +38,14 @@ typedef enum {
     NL_CHOICE_ERR = -1       /* 模型不可用 / 解码失败 / 语法构造失败 */
 } NlChoiceStatus;
 
-/* 低置信度阈值（AC-8）：默认 0.5，NL_DECIDE_MIN_CONF 可覆盖；<0 表示不设阈值 */
+/* 低置信度阈值（AC-8）：默认 0（关闭），NL_DECIDE_MIN_CONF 可覆盖；<0 表示不设阈值 */
 double nl_choose_min_conf(void);
+
+/* 单候选时是否仍要跑 decode（默认否）。
+ * GBNF 只枚举候选，单候选时模型唯一能做的选择就是 <refuse>；而"该不该拒"是规则层
+ * 预算/能力的职责。实测 86 次选择里 refuse 命中 0 次，为它跑一次 ~1.9s 的 prefill 不值得。
+ * NL_DECIDE_SOLO_DECODE=1 可强制解码（需要模型的拒答信号时打开）。 */
+int nl_choose_solo_decode(void);
 
 /* 构造 Choice 的 user 段（纯字符串，无模型依赖，便于单测）。
  * 返回写入长度；-1 参数错误或缓冲区不足。 */

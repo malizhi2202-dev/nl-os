@@ -303,3 +303,15 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
 ---
 
 > `read_files` / `write_files` 是 R7.3 强约束；4-dev 提交前会 `git diff --name-only` 比对边界。
+
+---
+
+## 扩范围记录（R7.3 · 超出原 write_files 的改动）
+
+| 日期 | 文件 | 原因 | 关联任务 |
+|---|---|---|---|
+| 2026-10-25 | `src/libnlc/rule_engine.c`、`src/libnlc/rules_db.h`、`tests/unit/rule_slot_test.c` | 写 UAT 时发现主路径缺陷：`创建一个叫 uat 的文件夹` → `mkdir -p uat 的文件夹`（必然失败）。修槽位剥离 + 补 13 条自然说法规则 + 补回归 | T13 复测（B5 结论的直接落点） |
+| 2026-10-25 | `src/libnlc/decision.c` | 候选收缩与执行路径脱节（决策层用独立 20 条词典）。改为先跑规则层、命中意图 +50 强提示 | T10/T13 |
+| 2026-10-25 | `src/nlsh/nl_eval.{h,c}`、`src/nlsh/main.c` | `--eval` 与 `--decide` 是 T13 的评测入口，未在原 `write_files` 中 | T13 |
+| 2026-10-25 | `models/download_model.sh` | 失败仍退出 0、会在完整文件上误删模型 | T11b（模型就位的前提） |
+| 2026-10-25 | `src/libnlc/snapshot.c`、`tests/unit/{capability_scan,adapter_http}_test.c`、`scripts/verify_all.sh` | Release 全量构建无法通过（`-O2` 才触发的 `-Werror`），验证链只编 `nlbroker` 掩盖了问题 | 段 2 出口评审（架构师条件） |
