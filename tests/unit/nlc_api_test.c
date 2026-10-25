@@ -95,6 +95,45 @@ static void test_no_model_error(void) {
     PASS();
 }
 
+
+/* ADR-024：写操作的目标路径必须过安全网关（黑名单/白名单）。
+ * 事故：「删除 /etc/passwd」会一路生成 `rm -rf /etc/passwd` ——
+ * nl_path_check 一直存在，但主解析路径从没调用过它。 */
+static void test_write_path_gate(void) {
+    TEST("写操作路径过安全网关");
+    NlParseResult r;
+
+    ASSERT(nl_parse_rules_only("删除 /etc/passwd", &r) == -1, "黑名单拒绝");
+    ASSERT(nl_parse_rules_only("删除 /etc", &r) == -1, "黑名单目录拒绝");
+    ASSERT(nl_parse_rules_only("删除 /boot/vmlinuz", &r) == -1, "黑名单拒绝(boot)");
+
+    ASSERT(nl_parse_rules_only("删除 /tmp/nl_gate_probe", &r) == 1, "可写白名单放行");
+    ASSERT(r.command && strstr(r.command, "/tmp/nl_gate_probe") != NULL, "命令完整");
+    nl_parse_result_free(&r);
+
+    /* 相对路径按当前目录展开后判断：不能因为"不是绝对路径"就误拒 */
+    ASSERT(nl_parse_rules_only("删除 error.log", &r) == 1, "相对路径放行");
+    ASSERT(r.command && strstr(r.command, "rm -rf error.log") != NULL, "相对路径命令完整");
+    nl_parse_result_free(&r);
+
+    /* 读操作不受写白名单约束 */
+    ASSERT(nl_parse_rules_only("显示 /etc/hosts 的内容", &r) != -1, "读操作不误拒");
+    nl_parse_result_free(&r);
+    PASS();
+}
+
+/* ADR-024：泛名词不是对象 —— 「删除文件」不许变成 `rm -rf 文件` */
+static void test_generic_noun_refused(void) {
+    TEST("泛名词当对象 → 拒绝");
+    NlParseResult r;
+    ASSERT(nl_parse_rules_only("删除文件", &r) == 0, "没说清对象 → 不生成命令");
+    ASSERT(nl_parse_rules_only("删掉日志", &r) == 0, "日志是类别，不是对象");
+    ASSERT(nl_parse_rules_only("清理临时文件", &r) == 0, "临时文件是类别");
+    ASSERT(nl_parse_rules_only("删除 test.txt", &r) == 1, "具体文件正常");
+    nl_parse_result_free(&r);
+    PASS();
+}
+
 int main(void) {
     printf("nlc_api 单元测试\n================\n\n");
     test_init_free();
@@ -102,6 +141,8 @@ int main(void) {
     test_parse_model_fallback();
     test_agent_extensions();
     test_no_model_error();
+    test_write_path_gate();
+    test_generic_noun_refused();
     printf("\n结果: %d 通过 / %d 失败 / %d 总计\n", tests_passed, tests_failed, tests_run);
     return tests_failed > 0 ? 1 : 0;
 }

@@ -110,11 +110,21 @@ int main(void)
     TEST("does not over-strip names that end with 文件/目录");
     {
         static const Case c[] = {
-            { "删除 旧文件",                "rm -rf 旧文件" },
+            { "删除 logs目录",              "rm -rf logs目录" },
             { "删除 my目录",                "rm -rf my目录" },
         };
         ASSERT(check_cases("no-overstrip", c, (int)(sizeof(c) / sizeof(c[0]))) == 0,
                "over-stripping regression");
+        PASS();
+    }
+
+    /* 5b. 泛名词 ≠ 未过度剥离：`旧文件` 是**类别**（旧的文件），不是某个文件的名字。
+     * ADR-024 之后这类必须拒绝 —— 生成 `rm -rf 旧文件` 是删错东西，不是"完整命令"。 */
+    TEST("generic nouns are refused, not executed");
+    {
+        NlParseResult r;
+        ASSERT(nl_parse("删除 旧文件", &r) != 0, "旧文件 是类别 → 拒绝");
+        nl_parse_result_free(&r);
         PASS();
     }
 

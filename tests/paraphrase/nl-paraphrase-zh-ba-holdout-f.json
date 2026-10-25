@@ -1,0 +1,38 @@
+{
+  "_comment": [
+    "留出集 F（ADR-024 第六轮）：把字句（宾语在动词前）。写完直接跑，不调参。",
+    "反向验收：把字句里是泛名词时同样不许执行。"
+  ],
+  "format_version": 1,
+  "clusters": [
+    {
+      "cap": "ba-delete-F",
+      "expect": "rm",
+      "desc": "把 X 删掉",
+      "utterances": [
+        "把 release.log 删掉",
+        "把 /tmp/build.tmp 删掉",
+        "把那个 dump.log 删了",
+        "把这个 cache.db 删除"
+      ]
+    },
+    {
+      "cap": "ba-view-F",
+      "expect": "cat",
+      "desc": "把 X 看看",
+      "utterances": [
+        "把 CHANGELOG.md 看看",
+        "把那个 config.ini 看一眼"
+      ]
+    },
+    {
+      "cap": "ba-refuse-F",
+      "expect": "__refuse__",
+      "desc": "把字句 + 泛名词 → 拒绝",
+      "utterances": [
+        "把那些文件删掉",
+        "把东西删了"
+      ]
+    }
+  ]
+}

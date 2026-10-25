@@ -71,6 +71,57 @@ static int ascii_boundary_ok(const char *s, const char *match, size_t len) {
     return 1;
 }
 
+
+/* 泛名词：句子里根本没有指明具体对象。
+ *
+ * 「删除文件」里的"文件"不是文件名，是一个**类别**。把它当对象执行就是
+ * `rm -rf 文件` —— 那不是残缺命令，是删错东西（同类：「删掉日志」「清理临时文件」）。
+ * 这类必须当成"没说清对象"= 不成立，让上层如实拒绝或去问。
+ * 注意只做**整词匹配**：`/tmp/old.log`、`backup文件清单` 这些不是泛名词。
+ */
+static int is_generic_noun(const char *v) {
+    static const char *const GENERIC[] = {
+        "文件", "文件们", "这个文件", "那个文件", "这些文件", "那些文件",
+        "所有文件", "全部文件", "旧文件", "临时文件", "垃圾文件", "没用的文件",
+        "目录", "文件夹", "这个目录", "这个文件夹", "那个目录", "那个文件夹",
+        "东西", "内容", "数据", "项目", "日志", "旧日志", "临时数据",
+        "它", "它们", NULL
+    };
+    if (!v || !*v) return 1;
+    for (int i = 0; GENERIC[i]; i++)
+        if (strcmp(v, GENERIC[i]) == 0) return 1;
+
+    /* 泛名词 + 修饰语：`没用的东西`、`临时数据`、`那些日志`。
+     * 剥掉**泛用修饰语**后如果只剩类别名词，就算没说清对象；
+     * `logs目录`、`my目录` 这种"专名前缀"不剥（那是用户在给名字）。 */
+    static const char *const QUALIFIERS[] = {
+        "没用的", "不要的", "无用的", "多余的", "不用的", "临时", "垃圾", "废弃",
+        "旧的", "老的", "旧的", "那些", "这些", "所有", "全部", "一些", "相关", NULL
+    };
+    static const char *const CORE[] = {
+        "东西", "文件", "目录", "文件夹", "日志", "内容", "数据", "项目", "记录", NULL
+    };
+    const char *rest = v;
+    int stripped = 1;
+    while (stripped) {
+        stripped = 0;
+        for (int i = 0; QUALIFIERS[i]; i++) {
+            size_t ql = strlen(QUALIFIERS[i]);
+            if (strncmp(rest, QUALIFIERS[i], ql) == 0) {
+                rest += ql;
+                stripped = 1;
+                break;
+            }
+        }
+    }
+    if (rest != v) {
+        for (int i = 0; CORE[i]; i++)
+            if (strcmp(rest, CORE[i]) == 0) return 1;
+    }
+    return 0;
+}
+
+
 /* 输入原文中是否包含某个关键词（中文子串匹配；ASCII 命令名要求词边界，忽略大小写） */
 static int has_keyword(const char *input, const char *word) {
     if (!input || !word) return 0;
@@ -145,6 +196,51 @@ static char *strip_wrapping_quotes(const char *s) {
         if (quoted) return strndup(s + 1, len - 2);
     }
     return strdup(s);
+}
+
+/* 「把 X <动词>」：中文把字句的宾语在动词**前面**。
+ * after_key 只取"关键词之后"的内容，对这种语序永远取不到对象 ——
+ * 所以「把 error.log 删掉」一直"无法理解"，而「删除 error.log」可以。
+ * 这是语序问题，不是词汇问题，只能靠专门的槽位类型解决。 */
+static const char *const DEMONSTRATIVES[] = {
+    "那个", "这个", "那些", "这些", "所有", "全部", "一些", "一个", "俩", NULL
+};
+
+static char *extract_object_before_verb(const char *input, const char *verb) {
+    if (!input || !verb || !*verb) return NULL;
+    const char *ba = strstr(input, "把");
+    if (!ba) return NULL;
+    const char *start = ba + strlen("把");
+    const char *v = strstr(start, verb);
+    if (!v) return NULL;
+
+    const char *end = v;
+    while (start < end && isspace((unsigned char)*start)) start++;
+    while (end > start && isspace((unsigned char)end[-1])) end--;
+    if (end <= start) return NULL;
+
+    char *raw = strndup(start, (size_t)(end - start));
+    if (!raw) return NULL;
+
+    /* 去掉前导指量词：`把**那个** error.log 删掉` 的对象是 error.log */
+    int stripped = 1;
+    while (stripped) {
+        stripped = 0;
+        for (int i = 0; DEMONSTRATIVES[i]; i++) {
+            size_t dl = strlen(DEMONSTRATIVES[i]);
+            if (strncmp(raw, DEMONSTRATIVES[i], dl) == 0) {
+                memmove(raw, raw + dl, strlen(raw + dl) + 1);
+                while (isspace((unsigned char)raw[0])) memmove(raw, raw + 1, strlen(raw));
+                stripped = 1;
+                break;
+            }
+        }
+    }
+
+    size_t len = trim_slot_span(raw, strlen(raw));
+    raw[len] = '\0';
+    if (!raw[0]) { free(raw); return NULL; }
+    return raw;
 }
 
 /* 查找关键词后的内容（如 "删除" 后面的剩余内容作为 target） */
@@ -329,9 +425,17 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
                 value = extract_after_key(input, slot->key ? slot->key : rule->keywords[0]);
             } else if (strcmp(slot->match_type, "after_key") == 0) {
                 value = extract_after_key_long(input, slot->key);
+            } else if (strcmp(slot->match_type, "before_verb") == 0) {
+                value = extract_object_before_verb(input, slot->key);
             } else if (strcmp(slot->match_type, "domain") == 0) {
                 value = nl_extract_domain(input);
                 if (!value) domain_missing = 1;   /* 认不出域名 = 规则不成立 */
+            }
+
+            /* 泛名词不算对象：「删除文件」的 target 不是"文件"这个字面名字 */
+            if (value && is_generic_noun(value)) {
+                free(value);
+                value = NULL;
             }
 
             if (value) {

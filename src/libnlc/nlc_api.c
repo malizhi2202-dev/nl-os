@@ -7,6 +7,8 @@
 
 #include "nlc_api.h"
 #include "resource_gate.h"
+#include "path_safety.h"
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,6 +111,42 @@ void nl_free(void) {
 
 const char *nl_get_last_error(void) { return g_error; }
 
+
+/* ============================================================
+ * 安全网关：写操作的路径必须过黑名单/白名单（ADR-012 / ADR-024 补）
+ *
+ * 事故：「删除 /etc/passwd」一路走到 L3 确认，生成的命令是 `rm -rf /etc/passwd`。
+ * 安全网关的 nl_path_check() 一直在，但只在 broker/verdict 那条路上被调用过；
+ * 规则层/模板层的路径从没经过它 —— 也就是说黑名单对 nlsh 的主路径是**失效**的。
+ *
+ * 口径：只有 perm >= L2（会改东西）的命令才做检查；读操作不受写白名单约束
+ * （`看看 /etc/hosts` 必须仍然能读，这本来就允许）。
+ * ============================================================ */
+static int cmd_paths_denied(const NlCommand *cmd) {
+    if (!cmd || cmd->perm_level < NL_PERM_L2) return 0;
+    for (int i = 0; i < cmd->path_count; i++) {
+        /* 相对路径先按当前目录展开：`rm -rf error.log` 的目标是 $PWD/error.log，
+         * 不展开就会被白名单当成"不在 /home /tmp 之下"而误拒。 */
+        char resolved[PATH_MAX * 2];
+        const char *p = cmd->paths[i];
+        if (p && p[0] != '/' && p[0] != '~') {
+            char cwd[PATH_MAX];
+            if (getcwd(cwd, sizeof(cwd)))
+                snprintf(resolved, sizeof(resolved), "%s/%.500s", cwd, p);
+            else
+                snprintf(resolved, sizeof(resolved), "%.500s", p);
+            p = resolved;
+        }
+        NlPathResult pr = nl_path_check(p, 1);
+        int bad = (pr.status != NL_PATH_PASS);
+        if (bad)
+            snprintf(g_error, sizeof(g_error), "安全网关拒绝：%s", pr.reason);
+        nl_path_result_free(&pr);
+        if (bad) return 1;
+    }
+    return 0;
+}
+
 /* ============================================================
  * 核心解析 · 四层管线
  * ============================================================ */
@@ -143,6 +181,12 @@ int nl_parse(const char *input, NlParseResult *result) {
         NlCommand cmd;
         if (nl_template_fill(rule_r.intent, rule_r.template_id,
                              rule_r.slots, rule_r.slot_count, &cmd) == 0) {
+            if (cmd_paths_denied(&cmd)) {       /* 写操作的目标路径被安全网关拒绝 */
+                nl_command_free(&cmd);
+                nl_rule_result_free(&rule_r);
+                nl_sanitize_result_free(&sr);
+                return -1;
+            }
             result->intent = rule_r.intent;
             result->command = cmd.command;
             result->perm_level = cmd.perm_level;
@@ -223,6 +267,12 @@ int nl_parse(const char *input, NlParseResult *result) {
     /* ── Layer 4: 模板填充 ── */
     NlCommand cmd;
     if (nl_template_fill(int_r.intent, 0, int_r.slots, int_r.slot_count, &cmd) == 0) {
+        if (cmd_paths_denied(&cmd)) {
+            nl_command_free(&cmd);
+            nl_intent_result_free(&int_r);
+            nl_sanitize_result_free(&sr);
+            return -1;
+        }
         result->intent = int_r.intent;
         result->command = cmd.command;
         result->perm_level = cmd.perm_level;
@@ -270,6 +320,12 @@ int nl_parse_rules_only(const char *input, NlParseResult *result) {
         NlCommand cmd;
         if (nl_template_fill(rule_r.intent, rule_r.template_id,
                              rule_r.slots, rule_r.slot_count, &cmd) == 0) {
+            if (cmd_paths_denied(&cmd)) {
+                nl_command_free(&cmd);
+                nl_rule_result_free(&rule_r);
+                nl_sanitize_result_free(&sr);
+                return -1;
+            }
             result->intent = rule_r.intent;
             result->command = cmd.command;
             result->perm_level = cmd.perm_level;

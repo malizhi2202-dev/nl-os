@@ -37,6 +37,20 @@ typedef struct {
 
 static const NlRule RULES[] = {
 
+    /* ── 把字句（宾语在动词前，ADR-024 续）──
+     * 「把 error.log 删掉」和「删除 error.log」是同一件事，语序不同。
+     * 必须排在各 delete/view 规则之前：否则「把 xx 删掉」会先被
+     * 「含'删除'」之外的模式漏掉（现在删除类规则要求"删除"二字，所以并不冲突，
+     * 但保持在前更明确）。 */
+    {200, NL_INTENT_DELETE, 3,
+     {"把", "删", NULL},
+     {{"target", "before_verb", "删"}, {NULL}},
+     "把 error.log 删掉"},
+    {201, NL_INTENT_VIEW_FILE, 7,
+     {"把", "看", NULL},
+     {{"target", "before_verb", "看"}, {NULL}},
+     "把 README.md 看看"},
+
     /* ── create_dir · 创建目录 ── */
     {1,  NL_INTENT_CREATE_DIR, 1,
      {"创建", "文件夹", NULL},
