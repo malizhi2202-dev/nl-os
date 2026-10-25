@@ -23,6 +23,9 @@ typedef struct {
     const char *keyword;
     const char *cap_name;
     int         weight;
+    /* 排除后缀（可选）：关键词后面紧跟这些字时不算命中。中文没有空格，
+     * 子串匹配会撞车 —— 「服务」撞进「服务**器**还稳定吗」把 uptime 判成 systemctl。 */
+    const char *excl;
 } NlDecideHint;
 
 static const NlDecideHint HINTS[] = {
@@ -81,6 +84,10 @@ static const NlDecideHint HINTS[] = {
     /* ── 网络/端口（lsof 是 L1；ss/netstat 未登记 → L4 不放行）── */
     { "端口", "lsof", 10 },     { "监听", "lsof", 10 },    { "网络连接", "lsof", 10 },
     { "连接", "lsof", 8 },      { "开放", "lsof", 8 },
+    /* ── 服务（systemctl 只读形态，ADR-024 续）── */
+    { "服务", "systemctl", 10, "器" },   /* 服务器 ≠ 服务 */
+    { "系统服务", "systemctl", 10 },
+    { "开了哪些服务", "systemctl", 10 },
     /* ── 网卡 / 域名解析（ADR-024）
      * 这一层认的是"这句话在问哪一类东西"，不是"这句话怎么写"：
      * 出现网卡/接口/地址/连通 → ip；出现域名/解析/dns/指向 → dig。
@@ -146,12 +153,88 @@ static int tld_is_common(const char *domain)
     return 0;
 }
 
+/* ============================================================
+ * 同义名词归一 + 名词×标记词组合（ADR-024 续）
+ *
+ * 事故：「当前目录」能用，但「当前文件夹」「现在的文件夹」「所在文件夹」全都"无法理解"。
+ * 原因不是漏了某一句，而是**名词的两套写法**在词典里各写了一半：
+ * "目录" 进了 ls/pwd 的提示词，"文件夹" 只挂在 mkdir（L2，会被过滤）上。
+ * 于是 修饰语 × 名词 的组合覆盖不住。
+ *
+ * 修法不是再补十个短语，而是把它拆成正交的两件事：
+ *   1) 名词归一：文件夹/档案夹/资料夹 ≡ 目录（词典里只保留一种写法）；
+ *   2) 组合判断：容器名词 × 标记词
+ *        身份标记（在哪/哪个/什么地方/是啥）→ pwd
+ *        内容标记（里/下/内容/有什么/清单）→ ls
+ * 修饰语（当前/现在/这个/所在）不需要进词典 —— 它不影响"问身份还是问内容"。
+ * ============================================================ */
+
+static void replace_all(char *s, size_t cap, const char *from, const char *to)
+{
+    size_t fl = strlen(from), tl = strlen(to);
+    if (tl > fl || fl == 0) return;
+    char *p;
+    while ((p = strstr(s, from)) != NULL) {
+        size_t tail = strlen(p + fl);
+        if ((size_t)(p - s) + tl + tail + 1 > cap) return;
+        memmove(p + tl, p + fl, tail + 1);
+        memcpy(p, to, tl);
+    }
+}
+
+static const char *normalize_input(const char *input, char *buf, size_t cap)
+{
+    snprintf(buf, cap, "%s", input);
+    replace_all(buf, cap, "文件夹", "目录");
+    replace_all(buf, cap, "档案夹", "目录");
+    replace_all(buf, cap, "资料夹", "目录");
+    /* 结构助词「的」不影响判断，但会把词典里的固定说法切开：
+     * 「我所在的文件夹」归一成「我所在的目录」，而词典里是「所在目录」——
+     * 只差一个「的」就对不上。汉字里"的"是最不影响语义的成分，去掉它。 */
+    replace_all(buf, cap, "的", "");
+    return buf;
+}
+
+#define NL_DECISION_MARKER_BIAS 12
+
+static int has_any(const char *s, const char *const *words)
+{
+    for (int i = 0; words[i]; i++)
+        if (contains_ci(s, words[i])) return 1;
+    return 0;
+}
+
+/* 关键词命中判定：子串命中，且（若给了 excl）后面紧跟的字不在排除集里 */
+static int hint_hit(const char *input, const NlDecideHint *h)
+{
+    size_t kl = strlen(h->keyword);
+    for (const char *p = input; *p; p++) {
+        size_t i = 0;
+        while (i < kl && p[i] && tolower((unsigned char)p[i]) ==
+                                tolower((unsigned char)h->keyword[i])) i++;
+        if (i != kl) continue;
+        const char *next = p + kl;
+        if (h->excl && *next) {
+            const char *e = h->excl;
+            while (*e) {
+                int el = 1;
+                if ((unsigned char)*e >= 0xE0) el = 3;   /* UTF-8 汉字 3 字节 */
+                if (strncmp(next, e, (size_t)el) == 0) { i = 0; break; }
+                e += el;
+            }
+            if (i == 0 && *e) continue;   /* 被排除：换下一个位置 */
+        }
+        return 1;
+    }
+    return 0;
+}
+
 static int hint_score_for(const char *name, const char *input)
 {
     int score = 0;
     for (int i = 0; HINTS[i].keyword != NULL; i++) {
         if (strcmp(HINTS[i].cap_name, name) != 0) continue;
-        if (contains_ci(input, HINTS[i].keyword)) score += HINTS[i].weight;
+        if (hint_hit(input, &HINTS[i])) score += HINTS[i].weight;
     }
     return score;
 }
@@ -223,13 +306,16 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
     if (!input || !reg || !out) return -1;
     memset(out, 0, sizeof(*out));
 
+    char norm[512];
+    const char *txt = normalize_input(input, norm, sizeof(norm));
+
     int total = nl_cap_count(reg);
     out->total_scanned = total;
 
     /* 规则层先判一次：命中的意图给出强提示（+50），远高于词典的 +8/+10。
      * 这样"能执行的说法"与"决策层选得出来的说法"是同一套判断。 */
     NlRuleResult rr;
-    if (nl_rule_match(input, &rr) == 0) {
+    if (nl_rule_match(txt, &rr) == 0) {
         const char *hint = cap_for_intent(rr.intent);
         if (hint && nl_cap_find(reg, hint)) {
             const NlCapability *hc = nl_cap_find(reg, hint);
@@ -246,8 +332,8 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
 
         const char *name = local_name(c);
         int score = 0;
-        if (name[0] != '\0' && contains_ci(input, name)) score += 10;
-        score += hint_score_for(name, input);
+        if (name[0] != '\0' && contains_ci(txt, name)) score += 10;
+        score += hint_score_for(name, txt);
         offer(out, c->id, score);
     }
 
@@ -257,16 +343,45 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
      * 有没有域名 —— 这种判断只能做在结构上，写进关键词规则必然在其中一半上判错。
      * 除非句子里明确指向本机（我的/本机/自己/本地/网卡）。 */
     {
-        int local_hint = contains_ci(input, "我的") || contains_ci(input, "本机") ||
-                         contains_ci(input, "自己") || contains_ci(input, "本地") ||
-                         contains_ci(input, "网卡") || contains_ci(input, "网口");
+        int local_hint = contains_ci(txt, "我的") || contains_ci(txt, "本机") ||
+                         contains_ci(txt, "自己") || contains_ci(txt, "本地") ||
+                         contains_ci(txt, "网卡") || contains_ci(txt, "网口");
         if (!local_hint) {
-            char *dom = nl_extract_domain(input);
-            if (dom && (dns_hint_present(input) || tld_is_common(dom)))
+            char *dom = nl_extract_domain(txt);
+            if (dom && (dns_hint_present(txt) || tld_is_common(dom)))
                 offer(out, "cli:dig", NL_DECISION_DOMAIN_BIAS);
             free(dom);
         }
     }
+    /* 组合判断：容器名词 × 标记词（见本文顶部说明） */
+    {
+        static const char *const DIR_NOUNS[] = { "目录", NULL };
+        static const char *const LOC_NOUNS[] = { "路径", "位置", NULL };
+        static const char *const IDENTITY[] = {
+            "在哪", "哪个", "什么地方", "什么位置", "是啥", "是什么", "哪儿", NULL
+        };
+        /* 内容标记必须是能独立表意的词：裸「里」「下」会误撞
+         * 「查看一**下**当前工作目录」→ 被判成"看目录内容"。 */
+        static const char *const CONTENTS[] = {
+            "里面", "底下", "内容", "有什么", "有啥", "清单", "列表", "目录里", "目录下", NULL
+        };
+        int has_dir = has_any(txt, DIR_NOUNS);
+        int has_loc = has_any(txt, LOC_NOUNS);
+        /* 「路径/位置」问的是"我在哪"，「目录」默认问的是"里面有什么" */
+        if (has_loc || (has_dir && has_any(txt, IDENTITY)))
+            offer(out, "cli:pwd", NL_DECISION_MARKER_BIAS);
+        if (has_dir && has_any(txt, CONTENTS))
+            offer(out, "cli:ls", NL_DECISION_MARKER_BIAS);
+        /* 光一个容器名词（这个目录 / 工作目录 / 所在文件夹）默认就是"看看这个目录"。
+         * 例外：问"这目录是干什么用的"是在要**解释**，不是要清单 ——
+         * 这类句子里出现目的/用途标记词，就不该被只读兜底接住（它会答成 ls）。 */
+        static const char *const PURPOSE[] = {
+            "干什么", "做什么", "干啥", "干嘛", "用来", "起什么作用", "是什么的", NULL
+        };
+        if (has_dir && !has_any(txt, PURPOSE))
+            offer(out, "cli:ls", NL_DECISION_MARKER_BIAS - 2);
+    }
+
     return 0;
 }
 

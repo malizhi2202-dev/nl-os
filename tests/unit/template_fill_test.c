@@ -162,11 +162,22 @@ static void test_bad_intent(void) {
 }
 
 static void test_empty_slot(void) {
-    TEST("empty slot → {slot} removed"); NlCommand cmd;
-    ASSERT(nl_template_fill(NL_INTENT_CREATE_DIR, 1, NULL, 0, &cmd) == 0, "fill");
-    /* 槽位缺失时 {name} 被移除，留下 "mkdir -p " */
-    ASSERT(strstr(cmd.command, "mkdir") != NULL, "still mkdir");
+    TEST("空槽位 → 拒绝生成（ADR-024：残缺命令比拒绝更糟）");
+    NlCommand cmd;
+    /* 槽位缺失时**不能**退化成 `mkdir -p `：那是让用户以为听懂了，
+     * 实际执行的却是另一个动作。 */
+    ASSERT(nl_template_fill(NL_INTENT_CREATE_DIR, 1, NULL, 0, &cmd) == -1, "缺 name 拒绝");
+
+    NlSlot s[1];
+    s[0].name = strdup("name"); s[0].value = strdup("");
+    ASSERT(nl_template_fill(NL_INTENT_CREATE_DIR, 1, s, 1, &cmd) == -1, "空 name 拒绝");
+    free(s[0].name); free(s[0].value);
+
+    s[0].name = strdup("name"); s[0].value = strdup("demo");
+    ASSERT(nl_template_fill(NL_INTENT_CREATE_DIR, 1, s, 1, &cmd) == 0, "有 name 才生成");
+    ASSERT(strcmp(cmd.command, "mkdir -p demo") == 0, "命令完整");
     nl_command_free(&cmd);
+    free(s[0].name); free(s[0].value);
     PASS();
 }
 

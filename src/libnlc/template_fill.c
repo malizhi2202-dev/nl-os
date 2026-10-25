@@ -106,6 +106,12 @@ int nl_template_fill(NlIntentType intent, int template_id,
     }
     if (!tmpl || !tmpl->template_str) return -1;
 
+    /* 规则点名的模板同样要求"槽位填得满"（ADR-024）。
+     * 否则「创建文件夹」会生成 `mkdir -p `（空名字）、「删除文件」会生成
+     * `rm -rf 文件`（删一个叫"文件"的东西）—— 残缺命令比拒绝更糟：
+     * 它让用户以为系统听懂了，实际执行的是另一个动作。 */
+    if (!template_satisfiable(tmpl, slots, slot_count)) return -1;
+
     /* 域名槽位预检（ADR-024）：域名是模板里唯一的自由文本参数，两道关都要过。
      *   1) 必须存在 —— 缺了就不是一次完整查询，不能生成 `dig +short` 这种半条命令；
      *   2) 必须通过 nl_domain_check —— 挡住 `-f /etc/passwd` 这类"参数当选项"的注入。

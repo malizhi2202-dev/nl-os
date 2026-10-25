@@ -39,22 +39,33 @@ typedef struct {
     const char *args;        /* LITERAL：完整参数；DOMAIN：含 %s 的格式串 */
     NlDefaultKind kind;
     NlIntentType intent;
+    int max_binary_perm;     /* 允许"二进制本身到几级"：见下方 readonly form 说明 */
 } NlReadOnlyDefault;
 
+/* 关于 max_binary_perm（ADR-024 续）：
+ * 权限表按**二进制名**分级，`systemctl` 因此是 L2（它能 stop/restart）。
+ * 但 `systemctl list-units --type=service` 是纯只读查询。这里表达的是：
+ * "这个**形态**是审查过的只读形态，即使二进制是 L2，也可以按 L1 无人值守执行"。
+ * 前提是 exec 层对同一个二进制做了形态白名单（只有登记形态能执行），
+ * 否则 L1 就成了"整个 systemctl 免确认"的借口。 */
+
 static const NlReadOnlyDefault READ_DEFAULTS[] = {
-    { "pwd",    "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "ls",     "-la",           NL_DEFAULT_LITERAL, NL_INTENT_LIST_DIR     },
-    { "ps",     "aux",           NL_DEFAULT_LITERAL, NL_INTENT_SHOW_PROCESS },
-    { "df",     "-h",            NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "free",   "-m",            NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "uptime", "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "whoami", "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "uname",  "-a",            NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "date",   "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
-    { "lsof",   "-i -P -n",      NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },  /* 端口/连接 */
-    { "ip",     "-br addr",      NL_DEFAULT_LITERAL, NL_INTENT_SHOW_NETWORK },  /* 网卡/地址 */
-    { "dig",    "+short %s",     NL_DEFAULT_DOMAIN,  NL_INTENT_SHOW_NETWORK },  /* 域名解析 */
-    { NULL, NULL, NL_DEFAULT_LITERAL, NL_INTENT_OTHER }
+    { "pwd",       "",           NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "ls",        "-la",        NL_DEFAULT_LITERAL, NL_INTENT_LIST_DIR,     1 },
+    { "ps",        "aux",        NL_DEFAULT_LITERAL, NL_INTENT_SHOW_PROCESS, 1 },
+    { "df",        "-h",         NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "free",      "-m",         NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "uptime",    "",           NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "whoami",    "",           NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "uname",     "-a",         NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "date",      "",           NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },
+    { "lsof",      "-i -P -n",   NL_DEFAULT_LITERAL, NL_INTENT_OTHER,        1 },  /* 端口/连接 */
+    { "ip",        "-br addr",   NL_DEFAULT_LITERAL, NL_INTENT_SHOW_NETWORK, 1 },  /* 网卡/地址 */
+    { "dig",       "+short %s",  NL_DEFAULT_DOMAIN,  NL_INTENT_SHOW_NETWORK, 1 },  /* 域名解析 */
+    /* 服务列表：systemctl 是 L2，但这一个形态是只读的（exec 层只放行这一条） */
+    { "systemctl", "list-units --type=service --no-pager",
+                                 NL_DEFAULT_LITERAL, NL_INTENT_SHOW_PROCESS, 2 },
+    { NULL, NULL, NL_DEFAULT_LITERAL, NL_INTENT_OTHER, 0 }
 };
 
 /* 命中则返回表项，未命中返回 NULL */
@@ -83,19 +94,34 @@ int nl_parse_by_decision(const char *input, const NlCapRegistry *reg, NlParseRes
     int has_path = (paths && paths[0]) ? 1 : 0;
     nl_free_paths(paths);
 
+    /* 句子在要求**改状态**时，只读兜底就是在回答另一个问题：
+     * 「把服务停掉」曾兜底成 `systemctl list-units`（用户要停，我们列了一遍）。
+     * 兜底只做只读查询，所以这类句子一律不猜。 */
+    {
+        static const char *const MUTATE[] = {
+            "启动", "停止", "停掉", "关掉", "关闭", "重启", "重载", "启用", "禁用",
+            "安装", "卸载", "删除", "删掉", "创建", "新建", "修改", "改成", "设置成",
+            "杀掉", "结束进程", NULL
+        };
+        for (int i = 0; MUTATE[i]; i++) {
+            if (strstr(input, MUTATE[i])) return 0;   /* 不兜底，交给上层（规则/确认/模型） */
+        }
+    }
+
     for (int k = 0; k < c.count; k++) {
         if (c.items[k].score < NL_DECISION_MIN_SCORE) break;   /* 已按分数降序 */
 
         const NlCapability *cap = nl_cap_find(reg, c.items[k].id);
         if (!cap || !cap->path || !cap->trusted) continue;
         if (cap->kind != NL_CAP_KIND_FILE) continue;
-        /* 只兜底 L1 只读：L2 要确认、L3 高危、L4 禁止，都不是"兜底"该干的事 */
-        if (cap->perm_level != 1) continue;
-
         const char *local = strrchr(cap->id, ':');
         local = local ? local + 1 : cap->id;
         const NlReadOnlyDefault *d = default_for(local);
         if (!d) continue;                  /* 表外工具：不猜 */
+
+        /* 只兜底"审查过的只读形态"：二进制本身可以比 L1 高（systemctl=L2），
+         * 但只到表里写明的上限；L3/L4 一律不碰。 */
+        if (cap->perm_level > d->max_binary_perm) continue;
         if (has_path && d->kind == NL_DEFAULT_LITERAL) continue;  /* 带路径：字面量参数答非所问 */
 
         char cmd[1024];
@@ -118,10 +144,10 @@ int nl_parse_by_decision(const char *input, const NlCapRegistry *reg, NlParseRes
         r->command = strdup(cmd);
         if (!r->command) return -1;
         r->intent = d->intent;
-        r->perm_level = (NlPermLevel)cap->perm_level;
+        r->perm_level = NL_PERM_L1;   /* 审查过的只读形态：即使二进制是 L2，也不需要确认 */
         r->source = NL_SOURCE_DECISION;
         r->confidence = 1.0f;
-        r->needs_confirm = (cap->perm_level >= 2);
+        r->needs_confirm = 0;
         snprintf(r->debug_info, sizeof(r->debug_info),
                  "[决策层] 认出 %s（score=%d）→ 只读默认参数，未加载模型",
                  cap->id, c.items[k].score);

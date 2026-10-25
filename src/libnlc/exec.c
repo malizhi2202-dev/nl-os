@@ -34,8 +34,11 @@ static const struct {
     const char *form;
     NlFormKind  kind;
 } RESTRICTED_FORMS[] = {
-    { "ip",  "ip -br addr", FORM_EXACT      },
-    { "dig", "dig +short",  FORM_DOMAIN_ARG },
+    { "ip",        "ip -br addr", FORM_EXACT      },
+    { "dig",       "dig +short",  FORM_DOMAIN_ARG },
+    /* systemctl 在权限表里是 L2（能 stop/restart/enable）。只放行服务列表这一个
+     * 只读形态，别的形态一律拒绝 —— 这样"服务列表"才敢按 L1 无人值守执行。 */
+    { "systemctl", "systemctl list-units --type=service --no-pager", FORM_EXACT },
     { NULL,  NULL,          FORM_EXACT      }
 };
 
