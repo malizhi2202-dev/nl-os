@@ -42,6 +42,18 @@
 | **A1** | 扫地机器人 SoC（全志 Cortex-A7 四核 + 512MB DDR3 + 4GB eMMC）、OpenWrt 路由、老电视盒子 | 128MB–768MB | **仅 embedding + 规则**；decoder 完全不上（0.35B 常驻约 250MB，512MB 机器会 OOM） |
 | **A2** | 树莓派 4、入门工控机 | 1–4GB | embedding + 可选 0.35B decoder |
 
+**明确不支持 · 手机（Android / iOS）**——理由是**平台不允许，而非硬件不够**：
+
+- 手机硬件属 Tier C 甚至更强（ARMv9 八核 / 12–16GB / NPU），跑得动 3B
+- 但 Android 不是 GNU/Linux：不符合 FHS（无 `/usr/bin`）、Bionic libc 与 glibc ABI 不兼容、
+  Android 8+ 非 root 下静态可执行被 seccomp 拦截、App 沙箱（独立 uid + SELinux label）拿不到系统级能力
+- 因此 `nlsh` / 能力自发现 / 跨进程权限裁决在手机上均不成立
+- **保留的唯一形态是 SDK**：`libnlc`（尤其 embedding 后端）可作为 `.so` 经 NDK 编入 App，
+  由 App 自行声明可用能力；此时 L1–L4 只覆盖 App 内部动作，与 Android 系统权限体系并存而非替代
+- iOS 更快出局：无 `fork/exec`、无任意进程加载、App Store 审核限制
+
+> 依据：Termux 官方《Differences from Linux》（FHS 不兼容 / Bionic libc / seccomp 限制 / 单用户沙箱）。
+
 **明确不支持（out of scope）**：MCU / RTOS 设备——如智能空调控制板
 （Cortex-M0 @48MHz + 128KB Flash，Wi-Fi 为独立模组）、低端扫地机、绝大多数家电。
 它们无 MMU、无 Linux、内存为 KB 级。这类设备的自然语言理解必须发生在**手机 App 或云端**，
