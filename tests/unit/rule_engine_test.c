@@ -219,6 +219,31 @@ static void test_null_input(void) {
 /* ============================================================
  * 入口
  * ============================================================ */
+
+/* ADR-024：网卡规则，以及"没有域名就别硬套 DNS" */
+static void test_show_network(void) {
+    NlRuleResult r;
+    TEST("网卡");
+    ASSERT(nl_rule_match("网卡信息", &r) == 0, "miss");
+    ASSERT(r.intent == NL_INTENT_SHOW_NETWORK, "intent");
+    ASSERT(r.template_id == 1401, "template");
+    nl_rule_result_free(&r);
+    PASS();
+
+    TEST("网络接口");
+    ASSERT(nl_rule_match("看看网络接口", &r) == 0, "miss");
+    ASSERT(r.intent == NL_INTENT_SHOW_NETWORK && r.template_id == 1401, "net iface");
+    nl_rule_result_free(&r);
+    PASS();
+
+    /* DNS 不写规则：交给决策层的结构性判断（有域名 → dig） */
+    TEST("域名解析不走规则");
+    ASSERT(nl_rule_match("解析www.baidu.com这个域名", &r) != 0, "rules 不接 DNS");
+    ASSERT(nl_rule_match("网卡信息", &r) == 0, "网卡仍走规则");
+    nl_rule_result_free(&r);
+    PASS();
+}
+
 int main(void) {
     printf("rule_engine 单元测试\n====================\n\n");
 
@@ -240,6 +265,8 @@ int main(void) {
     test_change_dir(); test_cd();
     printf("\n--- show_process ---\n");
     test_show_process(); test_system_load();
+    printf("\n--- show_network ---\n");
+    test_show_network();
     printf("\n--- search_content ---\n");
     test_grep();
     printf("\n--- run_cmd ---\n");

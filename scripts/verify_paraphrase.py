@@ -85,11 +85,15 @@ def main():
 
     for c in clusters:
         cap, expect, utts = c["cap"], c["expect"], c["utterances"]
+        # expect == "__refuse__"：这一类**必须**拒绝。防止为了覆盖率把"没参数的
+        # 请求"硬套成一条命令（猜出来的命令比拒绝更糟：它在回答别的问题）。
+        want_refuse = expect == "__refuse__"
         ok = 0
         for u in utts:
             total += 1
             parsed, got, raw = run_one(nlsh, u, no_model)
-            if parsed and got == expect:
+            good = (not parsed) if want_refuse else (parsed and got == expect)
+            if good:
                 ok += 1
                 passed += 1
             else:

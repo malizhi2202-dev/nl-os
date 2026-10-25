@@ -1,4 +1,5 @@
 #include "exec.h"
+#include "path_safety.h"   /* nl_domain_check：只读形态白名单里校验 dig 的参数 */
 
 #include <signal.h>
 #include <stdio.h>
@@ -15,11 +16,74 @@ int nl_exec_has_metachars(const char *cmd)
     return strpbrk(cmd, BANNED) != NULL ? 1 : 0;
 }
 
+/* ============================================================
+ * 只读形态白名单（ADR-024）
+ *
+ * 有些二进制既能只读也能改系统：`ip`（link set ... down）、`dig`（-f 读文件）。
+ * 权限表是按"二进制名"分级，无法表达"只允许只读形态"，于是这两者作为
+ * 网络诊断能力登记为 L1 时，必须再补一道**按命令形态**的闸门：
+ * 生成的命令只有在登记形态里才允许执行，其它形态一律拒绝（fail-closed）。
+ *
+ * 注意：这道闸门只管"NL 生成的命令"（nl_exec_execute 这条路径）。
+ * 用户在 shell 里手打 `ip link set ...` 属于原始命令快路径，不归这里管。
+ * ============================================================ */
+typedef enum { FORM_EXACT = 0, FORM_DOMAIN_ARG = 1 } NlFormKind;
+
+static const struct {
+    const char *argv0;
+    const char *form;
+    NlFormKind  kind;
+} RESTRICTED_FORMS[] = {
+    { "ip",  "ip -br addr", FORM_EXACT      },
+    { "dig", "dig +short",  FORM_DOMAIN_ARG },
+    { NULL,  NULL,          FORM_EXACT      }
+};
+
+int nl_exec_form_allowed(const char *cmd)
+{
+    if (!cmd || !*cmd) return 0;
+
+    char argv0[64];
+    size_t i = 0;
+    while (cmd[i] && cmd[i] != ' ' && cmd[i] != '\t' && i < sizeof(argv0) - 1) {
+        argv0[i] = cmd[i];
+        i++;
+    }
+    argv0[i] = '\0';
+
+    for (int k = 0; RESTRICTED_FORMS[k].argv0; k++) {
+        if (strcmp(argv0, RESTRICTED_FORMS[k].argv0) != 0) continue;
+
+        const char *form = RESTRICTED_FORMS[k].form;
+        size_t flen = strlen(form);
+
+        /* 形态匹配刻意做成两种、不做宽松前缀：
+         *   EXACT      —— 整条必须一模一样。`ip` 必须走这条：`ip -br addr add …`
+         *                 这种"前缀对、后面改配置"的命令只有全串比对才拦得住。
+         *   DOMAIN_ARG —— 固定前缀 + 一个参数，参数必须过 nl_domain_check：
+         *                 `dig +short -f /etc/passwd` 这类"选项当域名"的注入由域名校验拦。 */
+        if (RESTRICTED_FORMS[k].kind == FORM_EXACT)
+            return strcmp(cmd, form) == 0 ? 1 : 0;
+
+        if (strncmp(cmd, form, flen) != 0 || cmd[flen] != ' ') return 0;
+        const char *arg = cmd + flen + 1;
+        if (*arg == '\0') return 0;
+        for (const char *p = arg; *p; p++)
+            if (*p == ' ' || *p == '\t') return 0;      /* 只允许一个参数 */
+        return nl_domain_check(arg) == 0 ? 1 : 0;
+    }
+    return 1;   /* 未受控的二进制：沿用原有的权限分级 */
+}
+
 int nl_exec_execute(const char *cmd, int timeout_ms)
 {
     if (!cmd || !*cmd) return -1;
     if (nl_exec_has_metachars(cmd)) {
         fprintf(stderr, "❌ 拒绝执行：命令含 shell 元字符\n");
+        return -1;
+    }
+    if (!nl_exec_form_allowed(cmd)) {
+        fprintf(stderr, "❌ 拒绝执行：`%s` 不是已登记的只读形态\n", cmd);
         return -1;
     }
 

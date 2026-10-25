@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "留出集 C（ADR-024 第三轮）。B 跑完后修了两处**类级**问题：",
+    "  1. 「在哪」这类 1-2 字虚词提示词撞车（本机现在连在哪个网段 → pwd）",
+    "  2. 域名的判别力不够（帮我查 example.org 的 IP → ip）",
+    "这批说法写的时候没有按实现去挑，跑一次即作废。"
+  ],
+  "format_version": 1,
+  "clusters": [
+    {
+      "cap": "net-ip-C",
+      "expect": "ip",
+      "desc": "本机网卡/地址（第三批）",
+      "utterances": [
+        "我机器上装了哪些网卡",
+        "现在用的是哪个网卡",
+        "本机的网络配置",
+        "看看我的网卡状态",
+        "机器IP是啥",
+        "我的网卡是不是还在工作",
+        "本机地址是多少来着",
+        "都有哪些网卡",
+        "本机的IP信息"
+      ]
+    },
+    {
+      "cap": "net-dns-C",
+      "expect": "dig",
+      "desc": "域名解析（第三批）",
+      "utterances": [
+        "www.apple.com 解析出来的IP",
+        "帮我看看 example.net 指向哪",
+        "example.net 的解析结果",
+        "查一下 www.microsoft.com 的IP地址",
+        "把 www.aliyun.com 解析成IP",
+        "www.docker.com 落在哪个IP上",
+        "解析 www.oracle.com",
+        "www.python.org 指向哪里"
+      ]
+    },
+    {
+      "cap": "net-refuse-C",
+      "expect": "__refuse__",
+      "desc": "没有域名：拒绝",
+      "utterances": [
+        "dns 怎么配",
+        "域名要到哪注册"
+      ]
+    }
+  ]
+}

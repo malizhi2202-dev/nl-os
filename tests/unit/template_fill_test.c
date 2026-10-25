@@ -178,6 +178,73 @@ static void test_perm_level_lookup(void) {
     PASS();
 }
 
+
+/* ============================================================
+ * 槽位驱动选模板（ADR-024）
+ *
+ * 旧语义 template_id==0 = 该 intent 的第一张模板，会把模型提取到的实体丢掉
+ * （说 list_dir + location=/var/log，结果还是裸 ls -la）。这里固定新语义。
+ * ============================================================ */
+static void test_pick_by_slots(void) {
+    TEST("模型层：实体能选中更具体的模板");
+    NlSlot s[2];
+    NlCommand cmd;
+
+    /* 给 location 就该选 601（ls -la {location}），而不是 6（ls -la） */
+    s[0].name = strdup("location"); s[0].value = strdup("/var/log");
+    ASSERT(nl_template_fill(NL_INTENT_LIST_DIR, 0, s, 1, &cmd) == 0, "fill 601");
+    ASSERT(strcmp(cmd.command, "ls -la /var/log") == 0, "路径进了命令");
+    nl_command_free(&cmd);
+
+    /* 不给槽位 → 退到不需要槽位的那张 */
+    ASSERT(nl_template_fill(NL_INTENT_LIST_DIR, 0, NULL, 0, &cmd) == 0, "fill 6");
+    ASSERT(strcmp(cmd.command, "ls -la") == 0, "无槽位用通用模板");
+    nl_command_free(&cmd);
+
+    /* view_file：给了 target 才可能生成 cat */
+    free(s[0].name); free(s[0].value);
+    s[0].name = strdup("target"); s[0].value = strdup("a.log");
+    ASSERT(nl_template_fill(NL_INTENT_VIEW_FILE, 0, s, 1, &cmd) == 0, "fill cat");
+    ASSERT(strcmp(cmd.command, "cat a.log") == 0, "文件名进了命令");
+    nl_command_free(&cmd);
+    free(s[0].name); free(s[0].value);
+    PASS();
+}
+
+static void test_pick_network(void) {
+    TEST("网络模板：域名槽位是唯一自由参数");
+    NlCommand cmd;
+    NlSlot s[1];
+
+    /* 无域名 → dig 模板不可满足，退到不参数的 ip */
+    ASSERT(nl_template_fill(NL_INTENT_SHOW_NETWORK, 0, NULL, 0, &cmd) == 0, "fill net");
+    ASSERT(strcmp(cmd.command, "ip -br addr") == 0, "无参数模板是 ip");
+    ASSERT(cmd.perm_level == NL_PERM_L1, "L1");
+    nl_command_free(&cmd);
+
+    s[0].name = strdup("domain"); s[0].value = strdup("www.baidu.com");
+    ASSERT(nl_template_fill(NL_INTENT_SHOW_NETWORK, 0, s, 1, &cmd) == 0, "fill dig");
+    ASSERT(strcmp(cmd.command, "dig +short www.baidu.com") == 0, "域名进了命令");
+    nl_command_free(&cmd);
+
+    /* 非法域名：整条失败，绝不生成 `dig +short -f /etc/passwd` 这种东西 */
+    free(s[0].value);
+    s[0].value = strdup("-f");
+    ASSERT(nl_template_fill(NL_INTENT_SHOW_NETWORK, 0, s, 1, &cmd) == -1, "非法域名拒绝");
+    free(s[0].value);
+    s[0].value = strdup("example.com;rm -rf /");
+    ASSERT(nl_template_fill(NL_INTENT_SHOW_NETWORK, 0, s, 1, &cmd) == -1, "元字符域名拒绝");
+    free(s[0].name); free(s[0].value);
+    PASS();
+}
+
+static void test_other_not_auto_picked(void) {
+    TEST("other 不参与自动选模板（否则泛规则会静默拿到命令）");
+    NlCommand cmd;
+    ASSERT(nl_template_fill(NL_INTENT_OTHER, 0, NULL, 0, &cmd) == -1, "other 无自动模板");
+    PASS();
+}
+
 /* ============================================================
  * 入口
  * ============================================================ */
@@ -193,6 +260,10 @@ int main(void) {
     test_search_content();
     test_change_dir();
     test_run_cmd();
+    printf("\n--- 槽位驱动选模板 ---\n");
+    test_pick_by_slots();
+    test_pick_network();
+    test_other_not_auto_picked();
     printf("\n--- 边界条件 ---\n");
     test_null_result();
     test_bad_intent();

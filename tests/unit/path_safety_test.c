@@ -253,6 +253,79 @@ static void test_sanitize_null_input(void) {
 }
 
 /* ============================================================
+ * 域名校验（ADR-024）
+ * ============================================================ */
+static void test_domain_valid(void) {
+    TEST("合法域名");
+    const char *ok[] = {
+        "example.com", "www.baidu.com", "wwww.baidu.com",
+        "a-b.example.co", "1.2.3.com", "xn--fiq228c.cn",
+        "a.b.c.d.example.org",
+    };
+    for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++)
+        ASSERT(nl_domain_check(ok[i]) == 0, ok[i]);
+    PASS();
+}
+
+static void test_domain_invalid(void) {
+    TEST("非法域名一律拒绝（fail-closed）");
+    const char *bad[] = {
+        "",                    /* 空 */
+        "localhost",           /* 无点 */
+        ".example.com",        /* 点开头 */
+        "example.com.",        /* 点结尾 */
+        "example..com",        /* 连续点 */
+        "-example.com",        /* '-'开头 → 选项注入面 */
+        "example-.com",        /* 标签以 '-' 结尾 */
+        "a.b",                 /* TLD 单字符（真实 TLD 没有 1 字母的） */
+        "8.8.8.8",             /* 全数字，不是主机名 */
+        "1.2.3",               /* TLD 不是字母 */
+        "exa mple.com",        /* 空格 */
+        "example.com; rm -rf /",/* 元字符 */
+        "example.com/x",       /* 斜杠 */
+        "user@example.com",    /* '@' */
+        "example.c",           /* TLD 太短 */
+        "_dmarc.example.com",  /* 下划线 */
+        "-f",                  /* dig 的选项注入试探 */
+        "/etc/passwd",
+    };
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+        ASSERT(nl_domain_check(bad[i]) == -1, bad[i]);
+    ASSERT(nl_domain_check(NULL) == -1, "NULL");
+    PASS();
+}
+
+static void test_domain_length_limits(void) {
+    TEST("域名长度边界（标签 63 / 总长 253）");
+    char label63[64];
+    memset(label63, 'a', 63); label63[63] = '\0';
+    char ok[80];
+    snprintf(ok, sizeof(ok), "%s.com", label63);
+    ASSERT(nl_domain_check(ok) == 0, "63 字符标签合法");
+
+    char label64[65];
+    memset(label64, 'a', 64); label64[64] = '\0';
+    char too_long[80];
+    snprintf(too_long, sizeof(too_long), "%s.com", label64);
+    ASSERT(nl_domain_check(too_long) == -1, "64 字符标签拒绝");
+
+    /* 总长 253 = 前缀 250 字符（以 '.' 结尾）+ "com" */
+    char big[258];
+    size_t pos = 0;
+    while (pos + 4 <= 247) { memcpy(big + pos, "aaa.", 4); pos += 4; }  /* 244 */
+    while (pos < 249) big[pos++] = 'a';                                 /* 249 */
+    big[pos++] = '.';                                                   /* 250 */
+    big[pos++] = 'c'; big[pos++] = 'o'; big[pos++] = 'm';               /* 253 */
+    big[pos] = '\0';
+    ASSERT(strlen(big) == 253, "构造出 253 字符");
+    ASSERT(nl_domain_check(big) == 0, "253 字符合法");
+
+    big[pos] = 'm'; big[pos + 1] = '\0';      /* 254 */
+    ASSERT(nl_domain_check(big) == -1, "254 字符拒绝");
+    PASS();
+}
+
+/* ============================================================
  * 边界条件
  * ============================================================ */
 static void test_empty_path(void) {
@@ -309,8 +382,12 @@ int main(void) {
     test_sanitize_clean_input();
     test_sanitize_null_byte();
     test_sanitize_control_chars();
-    test_sanitize_empty();
-    test_sanitize_null_input();
+    test_sanitize_empty();    test_sanitize_null_input();
+
+    printf("\n--- 域名校验 ---\n");
+    test_domain_valid();
+    test_domain_invalid();
+    test_domain_length_limits();
 
     printf("\n--- 边界条件 ---\n");
     test_empty_path();

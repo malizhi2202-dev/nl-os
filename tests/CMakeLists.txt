@@ -26,14 +26,17 @@ endif()
 
 # rule_engine 测试（T04）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/rule_engine_test.c)
-    add_executable(test_rule_engine unit/rule_engine_test.c)
+    # 域名槽位校验要调 nl_domain_check（ADR-024）→ 多编一个 path_safety.c
+    add_executable(test_rule_engine unit/rule_engine_test.c
+        ${CMAKE_SOURCE_DIR}/src/libnlc/path_safety.c)
     target_include_directories(test_rule_engine PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
     add_test(NAME rule_engine COMMAND test_rule_engine)
 endif()
 
 # template_fill 测试（T05）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/template_fill_test.c)
-    add_executable(test_template_fill unit/template_fill_test.c)
+    add_executable(test_template_fill unit/template_fill_test.c
+        ${CMAKE_SOURCE_DIR}/src/libnlc/path_safety.c)
     target_include_directories(test_template_fill PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
     add_test(NAME template_fill COMMAND test_template_fill)
 endif()

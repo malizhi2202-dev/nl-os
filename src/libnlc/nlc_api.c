@@ -202,6 +202,24 @@ int nl_parse(const char *input, NlParseResult *result) {
                         "[模型推理] intent=%s conf=%.2f latency=stub; ",
                         nl_intent_name(int_r.intent), int_r.confidence);
 
+    /* 结构化参数兜底（ADR-024）：模型负责判"是哪一类"，参数按形状抽。
+     * 模型没给 domain 时，从原句里按域名形状抠一个（形状不合规就不给），
+     * 这样「解析 www.qq.com 指向哪台机器」即使模型只答对了 intent，
+     * 也能落到正确的命令上；而不是因为少一个参数就整条作废。 */
+    {
+        int has_domain = 0;
+        for (int i = 0; i < int_r.slot_count; i++)
+            if (int_r.slots[i].name && strcmp(int_r.slots[i].name, "domain") == 0) has_domain = 1;
+        if (!has_domain && int_r.slot_count < NL_MAX_SLOTS) {
+            char *dom = nl_extract_domain(clean_input);
+            if (dom) {
+                int_r.slots[int_r.slot_count].name = strdup("domain");
+                int_r.slots[int_r.slot_count].value = dom;   /* 接管所有权 */
+                int_r.slot_count++;
+            }
+        }
+    }
+
     /* ── Layer 4: 模板填充 ── */
     NlCommand cmd;
     if (nl_template_fill(int_r.intent, 0, int_r.slots, int_r.slot_count, &cmd) == 0) {

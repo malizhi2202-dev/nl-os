@@ -38,6 +38,11 @@ static void write_registry(void)
     /* L1 但不在表里 → 不兜底 */
     fprintf(f, "{\"id\":\"cli:wc\",\"name\":\"wc\",\"path\":\"%s/wc\",\"perm\":\"L1\","
                "\"namespace\":\"cli\",\"effect\":\"read\",\"reversible\":true,\"source\":\"scan\",\"trusted\":true}\n", g_dir);
+    /* 网络诊断（ADR-024）：ip 用字面量参数，dig 用结构化抽取的域名 */
+    fprintf(f, "{\"id\":\"cli:ip\",\"name\":\"ip\",\"path\":\"%s/ip\",\"perm\":\"L1\","
+               "\"namespace\":\"cli\",\"effect\":\"read\",\"reversible\":true,\"source\":\"scan\",\"trusted\":true}\n", g_dir);
+    fprintf(f, "{\"id\":\"cli:dig\",\"name\":\"dig\",\"path\":\"%s/dig\",\"perm\":\"L1\","
+               "\"namespace\":\"cli\",\"effect\":\"read\",\"reversible\":true,\"source\":\"scan\",\"trusted\":true}\n", g_dir);
     /* L3 → 一律不兜底 */
     fprintf(f, "{\"id\":\"cli:rm\",\"name\":\"rm\",\"path\":\"%s/rm\",\"perm\":\"L3\","
                "\"namespace\":\"cli\",\"effect\":\"delete\",\"reversible\":false,\"source\":\"scan\",\"trusted\":true}\n", g_dir);
@@ -47,7 +52,7 @@ static void write_registry(void)
 /* 让 registry 里登记的文件真实存在（兜底要求可信普通文件） */
 static void touch_bins(void)
 {
-    const char *names[] = { "pwd", "df", "wc", "rm", NULL };
+    const char *names[] = { "pwd", "df", "wc", "rm", "ip", "dig", NULL };
     for (int i = 0; names[i]; i++) {
         char p[400];
         snprintf(p, sizeof(p), "%s/%s", g_dir, names[i]);
@@ -82,6 +87,31 @@ int main(void)
     ASSERT(rc == 1 && r.command && strstr(r.command, "df") && strstr(r.command, "-h"),
            "df 带固定参数 -h");
     nl_parse_result_free(&r);
+
+    /* 1b. 网络：同一类问句只靠语义就能落到 ip / dig（不靠逐句规则） */
+    rc = nl_parse_by_decision("看看我这台机器对外的地址", reg, &r);
+    ASSERT(rc == 1 && r.command && strstr(r.command, "/ip") && strstr(r.command, "-br addr"),
+           "问地址 → ip -br addr");
+    ASSERT(r.intent == NL_INTENT_SHOW_NETWORK, "intent 是 show_network");
+    nl_parse_result_free(&r);
+
+    rc = nl_parse_by_decision("帮我查一下www.qq.com指向哪台机器", reg, &r);
+    ASSERT(rc == 1 && r.command && strstr(r.command, "/dig") &&
+           strstr(r.command, "+short www.qq.com"), "有域名 → dig +short <域名>");
+    nl_parse_result_free(&r);
+
+    /* 没有域名就别猜 dns（"解析一下这个域名"不该生成半条 dig 命令） */
+    rc = nl_parse_by_decision("解析一下这个域名", reg, &r);
+    ASSERT(rc == 0 && r.command == NULL, "无域名的解析请求不兜底");
+
+    /* 指向本机的说法即使带"域名样"词也不跑 dig：「我的 IP」 */
+    rc = nl_parse_by_decision("我的 IP 地址是多少", reg, &r);
+    ASSERT(rc == 1 && r.command && strstr(r.command, "/ip"), "本机地址 → ip 而不是 dig");
+    nl_parse_result_free(&r);
+
+    /* 1c. 句子里带路径 → 表内字面量答非所问，必须拒绝而不是列当前目录 */
+    rc = nl_parse_by_decision("看看 /var/log 里有什么", reg, &r);
+    ASSERT(rc == 0 && r.command == NULL, "带路径不兜底（否则列的是当前目录）");
 
     /* 2. 安全边界：L3 的 rm 绝不兜底 */
     rc = nl_parse_by_decision("删除 /tmp/somewhere", reg, &r);

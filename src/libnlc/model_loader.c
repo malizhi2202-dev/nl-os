@@ -87,8 +87,12 @@ NlModel *nl_model_init(const char *path) {
     if (!m->llama_model) { free(m); return NULL; }
 
     struct llama_context_params cp = llama_context_default_params();
-    cp.n_ctx = 512;
-    cp.n_batch = 256;    /* prefill 批处理；n_batch=1 会把 prompt 处理拖成逐 token */
+    /* 上下文 2048：few-shot prompt 已经 ~500 token（系统提示 + 5 个示例），
+     * 512 的窗口里塞得进 prompt 却**没有位置生成** —— 实测报
+     * "failed to find a memory slot for batch of size 1"，然后整句"无法理解"。
+     * KV 开销对 0.5B/2 KV heads 约 12KB/token，2048 → 约 25MB，可忽略。 */
+    cp.n_ctx = 2048;
+    cp.n_batch = 512;    /* prefill 批处理；n_batch=1 会把 prompt 处理拖成逐 token */
     /* 线程数按实际核数（上限 8）：默认值在少核机器上会过订阅，反而更慢 */
     long cores = sysconf(_SC_NPROCESSORS_ONLN);
     int nt = (cores > 0) ? (int)cores : 1;
@@ -177,7 +181,9 @@ static int infer_impl(NlModel *m, const char *prompt, const char *grammar,
     char *out = output;
     size_t rem = max_len - 1;
     int total = 0;
+    int pos = n;                       /* 生成从 prompt 之后开始写 KV */
     for (int i = 0; i < 128 && rem > 0; i++) {
+        if (pos >= (int)n_ctx) break;  /* 窗口用完：停下来，别让 decode 报半截错误 */
         llama_token tid = llama_sampler_sample(smpl, m->llama_ctx, -1);
         if (llama_vocab_is_eog(m->vocab, tid)) break;
         record_conf(m, tid);
@@ -188,6 +194,7 @@ static int infer_impl(NlModel *m, const char *prompt, const char *grammar,
         memcpy(out, buf, (size_t)cn);
         out += cn; rem -= (size_t)cn; total += cn;
         if (llama_decode(m->llama_ctx, llama_batch_get_one(&tid, 1)) != 0) break;
+        pos++;
     }
     *out = '\0';
     llama_sampler_free(smpl);

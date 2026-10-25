@@ -22,6 +22,12 @@ typedef enum {
     NL_INTENT_SHOW_PROCESS,
     NL_INTENT_SEARCH_CONTENT,
     NL_INTENT_RUN_CMD,
+    /* 网络状态（网卡地址、域名解析）：ADR-024。
+     * 独立成 intent 而不是塞进 show_process —— show_process 已经被 uptime/lsof
+     * 借住过一次，再借下去"进程"这个词就彻底不指进程了；
+     * 也不能用 NL_INTENT_OTHER：template_id==0 在模板层是"该 intent 的第一个模板"，
+     * OTHER 里放模板会让 {"怎么"}→OTHER 的规则静默变成执行网络命令。 */
+    NL_INTENT_SHOW_NETWORK,
     NL_INTENT_OTHER
 } NlIntentType;
 
@@ -56,6 +62,14 @@ int nl_rule_match(const char *input, NlRuleResult *result);
  * 释放匹配结果中的槽位内存
  */
 void nl_rule_result_free(NlRuleResult *result);
+
+/*
+ * 从一句话里抠出第一个合法域名（允许与中文粘连，例如「解析www.baidu.com这个域名」）。
+ * 返回 malloc 的字符串，调用方 free；认不出返回 NULL。
+ * 通用动作识别用不到它，它是"结构化参数抽取"这一半：意图可以靠语义认，
+ * 参数必须靠形状校验（见 path_safety.h 的 nl_domain_check）。
+ */
+char *nl_extract_domain(const char *input);
 
 /*
  * 获取意图名称字符串

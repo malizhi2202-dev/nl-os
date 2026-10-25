@@ -411,6 +411,30 @@ static const NlRule RULES[] = {
      {{NULL}},
      "列出进程"},
 
+    /* ── show_network · 网络状态（ADR-024）──
+     * 两类问句：网卡/IP 地址（无参数）、域名解析（一个域名参数）。
+     * 域名解析这几条都声明了 domain 槽位：抠不出合法域名时整条命中不成立
+     * （rule_engine.c 里 domain_missing），所以「解析一下这个域名」这种没有域名的
+     * 句子会继续往下走，而不是被硬套成 `dig +short`。 */
+    {130, NL_INTENT_SHOW_NETWORK, 1401,
+     {"网卡", NULL},
+     {{NULL}},
+     "看看网卡信息"},
+    {131, NL_INTENT_SHOW_NETWORK, 1401,
+     {"网络接口", NULL},
+     {{NULL}},
+     "查看网络接口"},
+    {132, NL_INTENT_SHOW_NETWORK, 1401,
+     {"网口", NULL},
+     {{NULL}},
+     "本机有几个网口"},
+    /* 网卡/地址/域名解析**不写规则**（ADR-024）。
+     * 原因：这三类问句的参数不是句子的固定成分 —— 「我的 IP 是多少」和
+     * 「baidu.com 的 IP 是多少」句式几乎一样，区别只在"句子里有没有一个域名"。
+     * 用关键词规则表达它，只能二选一，必然在其中一半上判错；而这是结构性判断，
+     * 交给决策层：句子里有合法域名 → dig，否则出现网卡/地址/对外 → ip。
+     * 这里只保留三个**永远不可能问 DNS** 的说法（网卡/网络接口/网口）。 */
+
     /* ── search_content · 搜索内容 ── */
     {100, NL_INTENT_SEARCH_CONTENT, 11,
      {"grep", NULL},

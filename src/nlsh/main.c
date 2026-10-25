@@ -254,6 +254,18 @@ int main(int argc, char **argv) {
      * 满表 1891 条约 356KB，全量解析占掉一次调用 30ms 里的大头——这里省掉它。 */
     NlCapRegistry *reg = NULL;
     if (!(cmd && nl_is_traditional_cmd(cmd))) reg = nl_cap_load(reg_path, NULL);
+
+    /* 首次运行（注册表文件还不存在 → 空表）：扫一次 PATH 并落盘。
+     * 没有这一步，决策层在用户机器上等于不存在 —— 它靠注册表找候选，空表就是
+     * 零候选，然后所有没写规则的说法一律"无法理解"。ADR-024 记了这个坑：
+     * 通用层必须开箱可用，不能依赖用户先想到 `nlsh --scan`。
+     * 只在空表时扫（一次约 0.7s），之后都读已落盘的表。 */
+    if (reg && nl_cap_count(reg) == 0) {
+        int ndirs = 0;
+        const char *const *dirs = nl_cap_default_dirs(&ndirs);
+        if (nl_cap_scan_dirs(dirs, ndirs, reg) > 0)
+            (void)nl_cap_save_atomic(reg, reg_path);
+    }
     nl_dispatch_set_registry(reg);
 
     if(cmd) {

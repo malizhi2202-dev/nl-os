@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "留出集 B（ADR-024 第二轮）：上一批跑完就已经算「见过」，这批是新的、",
+    "写完直接跑、不调参，用来看上一轮的修法到底有没有普适性。",
+    "跑过之后这批同样作废。"
+  ],
+  "format_version": 1,
+  "clusters": [
+    {
+      "cap": "net-ip-B",
+      "expect": "ip",
+      "desc": "本机网卡/地址（第二批说法）",
+      "utterances": [
+        "电脑的网卡地址是多少",
+        "本机现在连在哪个网段",
+        "机器上都有哪些网络接口",
+        "帮我看一眼网卡",
+        "我这台机器的 IP",
+        "网卡的地址给我看下",
+        "现在本机的地址是多少",
+        "有哪些网卡在工作",
+        "本机对外地址",
+        "网口都连着吗"
+      ]
+    },
+    {
+      "cap": "net-dns-B",
+      "expect": "dig",
+      "desc": "域名解析（第二批说法）",
+      "utterances": [
+        "www.bing.com 解析到哪个地址",
+        "帮我查 example.org 的IP",
+        "example.org 的域名解析结果",
+        "cloudflare.com 指向哪个IP",
+        "把 www.zhihu.com 解析一下",
+        "www.jd.com 的dns是多少",
+        "解析一下 bilibili.com",
+        "douban.com 解析到哪里",
+        "查查 www.sina.com.cn 的地址",
+        "www.csdn.net 这个域名解析到哪"
+      ]
+    },
+    {
+      "cap": "net-refuse-B",
+      "expect": "__refuse__",
+      "desc": "没有域名：拒绝",
+      "utterances": [
+        "怎么解析域名",
+        "域名是什么",
+        "dns 是什么"
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 
 #include "rule_engine.h"
 #include "rules_db.h"
+#include "path_safety.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -219,13 +220,55 @@ static char *extract_after_key_long(const char *input, const char *key) {
     return out;
 }
 
+/* 从输入里"抠出"一个合法域名。
+ *
+ * 为什么不能用 after_key：中文句子里域名两端通常都没有空格
+ * ——「解析wwww.baidu.com这个域名的dns」里域名左边贴着"解析"、右边贴着"这个"，
+ * 按"关键词后第一个词"取会得到 `wwww.baidu.com这个域名的dns` 这样的垃圾。
+ * 这里改为扫描 ASCII 串，逐个用 nl_domain_check 校验，只认校验通过的。
+ * 校验不过 = 认不出域名 = 这条规则不成立（绝不拼半个参数去执行）。 */
+char *nl_extract_domain(const char *input) {
+    if (!input) return NULL;
+
+    const char *p = input;
+    while (*p) {
+        unsigned char c = (unsigned char)*p;
+        if (!(isalnum(c) || c == '.' || c == '-')) { p++; continue; }
+
+        /* 路径里的那一段是文件名，不是域名：`/home/x/README.md` 的 README.md 前面是 '/' */
+        if (p > input && p[-1] == '/') {
+            while (*p) {
+                unsigned char d = (unsigned char)*p;
+                if (!(isalnum(d) || d == '.' || d == '-')) break;
+                p++;
+            }
+            continue;
+        }
+
+        const char *start = p;
+        while (*p) {
+            unsigned char d = (unsigned char)*p;
+            if (!(isalnum(d) || d == '.' || d == '-')) break;
+            p++;
+        }
+        size_t len = (size_t)(p - start);
+        if (len == 0 || len > 253) continue;
+
+        char *cand = strndup(start, len);
+        if (!cand) return NULL;
+        if (nl_domain_check(cand) == 0) return cand;
+        free(cand);
+    }
+    return NULL;
+}
+
 /* ============================================================
  * 意图名称
  * ============================================================ */
 static const char *INTENT_NAMES[] = {
     "create_file", "create_dir", "delete", "move", "copy",
     "list_dir", "view_file", "find_files", "change_dir",
-    "show_process", "search_content", "run_cmd", "other"
+    "show_process", "search_content", "run_cmd", "show_network", "other"
 };
 
 const char *nl_intent_name(NlIntentType intent) {
@@ -276,6 +319,7 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
         result->confidence = 1.0f;
 
         /* 提取槽位值 */
+        int domain_missing = 0;
         for (int s = 0; rule->slots[s].name; s++) {
             const NlRuleSlotDef *slot = &rule->slots[s];
             if (result->slot_count >= NL_MAX_SLOTS) break;
@@ -285,6 +329,9 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
                 value = extract_after_key(input, slot->key ? slot->key : rule->keywords[0]);
             } else if (strcmp(slot->match_type, "after_key") == 0) {
                 value = extract_after_key_long(input, slot->key);
+            } else if (strcmp(slot->match_type, "domain") == 0) {
+                value = nl_extract_domain(input);
+                if (!value) domain_missing = 1;   /* 认不出域名 = 规则不成立 */
             }
 
             if (value) {
@@ -292,6 +339,13 @@ int nl_rule_match(const char *input, NlRuleResult *result) {
                 result->slots[result->slot_count].value = value;
                 result->slot_count++;
             }
+        }
+
+        /* 带域名槽位却抠不出合法域名（如「解析一下这个域名」「把域名改成 example」）
+         * → 这条命中不成立，继续试后面的规则。绝不生成 `dig +short` 这种半条命令。 */
+        if (domain_missing) {
+            nl_rule_result_free(result);
+            continue;
         }
 
         /* 「运行/执行 X」要求 X 像个命令（含 ASCII 字母数字）。

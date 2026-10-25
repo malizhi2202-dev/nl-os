@@ -32,6 +32,7 @@ static const struct {
     {"show_process",  NL_INTENT_SHOW_PROCESS},
     {"search_content",NL_INTENT_SEARCH_CONTENT},
     {"run_cmd",       NL_INTENT_RUN_CMD},
+    {"show_network",  NL_INTENT_SHOW_NETWORK},
     {"other",         NL_INTENT_OTHER},
     {NULL, 0}
 };
@@ -83,7 +84,7 @@ static int extract_entities(const cJSON *entities_obj, NlIntentResult *result) {
     if (!entities_obj || !cJSON_IsObject(entities_obj)) return 0;
 
     static const char *entity_keys[] = {"target", "location", "condition",
-                                         "filter_type", "filter_value", NULL};
+                                         "filter_type", "filter_value", "domain", NULL};
     for (int i = 0; entity_keys[i]; i++) {
         const char *val = NULL;
         if (nl_json_get_string(entities_obj, entity_keys[i], &val) == 0 && val[0]) {

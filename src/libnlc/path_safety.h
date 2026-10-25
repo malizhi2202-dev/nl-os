@@ -33,6 +33,10 @@ typedef struct {
 /* 路径规范化 + 白名单 + 黑名单 */
 NlPathResult nl_path_check(const char *path, int allow_write);
 
+/* 域名校验：只接受 [A-Za-z0-9.-] 的合法主机名形态。0=合法，-1=拒绝（fail-closed）。
+ * 用于「解析 <域名>」这类需要把自由文本拼进命令的只读查询。 */
+int nl_domain_check(const char *domain);
+
 /* 输入净化：剥离零宽字符/bidi/ANSI/控制字符 */
 NlSanitizeResult nl_input_sanitize(const char *input);
 

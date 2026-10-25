@@ -35,6 +35,9 @@ static const IntentCap INTENT_CAP[] = {
     { "move",           "cli:mv"    },
     { "copy",           "cli:cp"    },
     { "search_content", "cli:grep"  },
+    /* 网络状态里只有「网卡/地址」这一半是单能力可判定的；域名解析要域名参数，
+     * 判到 cli:dig 也没有意义，所以不参与准确率。 */
+    { "show_network",   "cli:ip"    },
     { "show_process",   "cli:ps"    },
     { NULL, NULL }
 };

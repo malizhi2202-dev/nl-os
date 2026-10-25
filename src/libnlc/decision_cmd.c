@@ -16,41 +16,52 @@
  */
 
 #include "decision.h"
+#include "rule_engine.h"
+#include "path_safety.h"
 #include "nlc_api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* 只读默认参数表：name → 参数（"" 表示不带参数）。全部是 L1 只读工具。 */
+/* 只读默认参数表：name → 参数（"" 表示不带参数）。全部是 L1 只读工具。
+ *
+ * ADR-024 加了两种参数形态：
+ *   LITERAL —— 参数是审查过的字面量（老路子，注入面为零）；
+ *   DOMAIN  —— 参数是一个**按形状校验过的域名**（"结构化参数抽取"）。
+ * 域名不是"猜"出来的：由 nl_extract_domain 抠形状、nl_domain_check 判合规，
+ * 抽不到或不合规就跳过这个候选，绝不拼半条命令。
+ * 为什么允许 DOMAIN：域名是外界名字，不是本机路径，不涉及越权；而 `dig` 的其余
+ * 形态（-f 读文件、@服务器）都在 exec 的只读形态白名单里被拒。 */
+typedef enum { NL_DEFAULT_LITERAL = 0, NL_DEFAULT_DOMAIN } NlDefaultKind;
+
 typedef struct {
     const char *name;
-    const char *args;
+    const char *args;        /* LITERAL：完整参数；DOMAIN：含 %s 的格式串 */
+    NlDefaultKind kind;
     NlIntentType intent;
 } NlReadOnlyDefault;
 
 static const NlReadOnlyDefault READ_DEFAULTS[] = {
-    { "pwd",    "",              NL_INTENT_OTHER        },
-    { "ls",     "-la",           NL_INTENT_LIST_DIR     },
-    { "ps",     "aux",           NL_INTENT_SHOW_PROCESS },
-    { "df",     "-h",            NL_INTENT_OTHER        },
-    { "free",   "-m",            NL_INTENT_OTHER        },
-    { "uptime", "",              NL_INTENT_OTHER        },
-    { "whoami", "",              NL_INTENT_OTHER        },
-    { "uname",  "-a",            NL_INTENT_OTHER        },
-    { "date",   "",              NL_INTENT_OTHER        },
-    { "lsof",   "-i -P -n",      NL_INTENT_OTHER        },  /* 端口/连接 */
-    { NULL, NULL, NL_INTENT_OTHER }
+    { "pwd",    "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "ls",     "-la",           NL_DEFAULT_LITERAL, NL_INTENT_LIST_DIR     },
+    { "ps",     "aux",           NL_DEFAULT_LITERAL, NL_INTENT_SHOW_PROCESS },
+    { "df",     "-h",            NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "free",   "-m",            NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "uptime", "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "whoami", "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "uname",  "-a",            NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "date",   "",              NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },
+    { "lsof",   "-i -P -n",      NL_DEFAULT_LITERAL, NL_INTENT_OTHER        },  /* 端口/连接 */
+    { "ip",     "-br addr",      NL_DEFAULT_LITERAL, NL_INTENT_SHOW_NETWORK },  /* 网卡/地址 */
+    { "dig",    "+short %s",     NL_DEFAULT_DOMAIN,  NL_INTENT_SHOW_NETWORK },  /* 域名解析 */
+    { NULL, NULL, NL_DEFAULT_LITERAL, NL_INTENT_OTHER }
 };
 
-/* 命中则返回参数指针（可能是 ""），未命中返回 NULL */
-static const char *default_args(const char *name, NlIntentType *intent)
+/* 命中则返回表项，未命中返回 NULL */
+static const NlReadOnlyDefault *default_for(const char *name)
 {
-    for (int i = 0; READ_DEFAULTS[i].name; i++) {
-        if (strcmp(READ_DEFAULTS[i].name, name) == 0) {
-            if (intent) *intent = READ_DEFAULTS[i].intent;
-            return READ_DEFAULTS[i].args;
-        }
-    }
+    for (int i = 0; READ_DEFAULTS[i].name; i++)
+        if (strcmp(READ_DEFAULTS[i].name, name) == 0) return &READ_DEFAULTS[i];
     return NULL;
 }
 
@@ -65,6 +76,13 @@ int nl_parse_by_decision(const char *input, const NlCapRegistry *reg, NlParseRes
     if (nl_decide_candidates(input, reg, &c) != 0) return -1;
     if (c.count == 0) return 0;
 
+    /* 句子里带了路径 → 表内的字面量参数表达不了它。
+     * 「看看 /var/log 里有什么」如果兜底成裸 `ls -la`，列的是当前目录 ——
+     * 那不是"不完整"，那是**回答了另一个问题**。这类只能如实拒绝（等路径参数那一层做）。 */
+    char **paths = nl_extract_paths(input);
+    int has_path = (paths && paths[0]) ? 1 : 0;
+    nl_free_paths(paths);
+
     for (int k = 0; k < c.count; k++) {
         if (c.items[k].score < NL_DECISION_MIN_SCORE) break;   /* 已按分数降序 */
 
@@ -76,19 +94,30 @@ int nl_parse_by_decision(const char *input, const NlCapRegistry *reg, NlParseRes
 
         const char *local = strrchr(cap->id, ':');
         local = local ? local + 1 : cap->id;
-        NlIntentType intent = NL_INTENT_OTHER;
-        const char *args = default_args(local, &intent);
-        if (!args) continue;               /* 表外工具：不猜 */
+        const NlReadOnlyDefault *d = default_for(local);
+        if (!d) continue;                  /* 表外工具：不猜 */
+        if (has_path && d->kind == NL_DEFAULT_LITERAL) continue;  /* 带路径：字面量参数答非所问 */
 
         char cmd[1024];
-        int n = args[0] ? snprintf(cmd, sizeof(cmd), "%s %s", cap->path, args)
-                        : snprintf(cmd, sizeof(cmd), "%s", cap->path);
+        int n;
+        if (d->kind == NL_DEFAULT_DOMAIN) {
+            /* 结构化参数抽取：句子里的域名按形状抠出来，校验不过就不执行这条 */
+            char *dom = nl_extract_domain(input);
+            if (!dom) continue;
+            char fmt[256];
+            snprintf(fmt, sizeof(fmt), "%s %s", cap->path, d->args);
+            n = snprintf(cmd, sizeof(cmd), fmt, dom);
+            free(dom);
+        } else {
+            n = d->args[0] ? snprintf(cmd, sizeof(cmd), "%s %s", cap->path, d->args)
+                           : snprintf(cmd, sizeof(cmd), "%s", cap->path);
+        }
         if (n < 0 || (size_t)n >= sizeof(cmd)) continue;
 
         memset(r, 0, sizeof(*r));
         r->command = strdup(cmd);
         if (!r->command) return -1;
-        r->intent = intent;
+        r->intent = d->intent;
         r->perm_level = (NlPermLevel)cap->perm_level;
         r->source = NL_SOURCE_DECISION;
         r->confidence = 1.0f;

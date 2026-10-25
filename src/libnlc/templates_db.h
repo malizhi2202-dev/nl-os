@@ -118,6 +118,16 @@ static const NlCmdTemplate TEMPLATES[] = {
     {1204,NL_INTENT_RUN_CMD, NL_PERM_L2,
      "sudo systemctl start {command}", {"command", NULL}, "启动服务"},
 
+    /* ── show_network ── （ADR-024）
+     * 两条都是**只读形态**：`ip -br addr` 只看地址与状态，`dig +short` 只查 A 记录。
+     * 但 `ip` 能写（ip link set ... down）、`dig` 能用 `-f 文件` 读任意文件，
+     * 所以这两个二进制在 exec 层另有一道形态白名单（nl_exec_form_allowed）：
+     * 除这里登记的字面形态外，任何别的形态都拒绝执行，fail-closed。 */
+    {1401,NL_INTENT_SHOW_NETWORK, NL_PERM_L1,
+     "ip -br addr",            {NULL},        "网卡、地址与状态"},
+    {1402,NL_INTENT_SHOW_NETWORK, NL_PERM_L1,
+     "dig +short {domain}",    {"domain", NULL}, "域名解析（A 记录）"},
+
     /* ── other ── */
     {0,  NL_INTENT_OTHER, NL_PERM_L1,
      NULL,                     {NULL},        "哨兵"},

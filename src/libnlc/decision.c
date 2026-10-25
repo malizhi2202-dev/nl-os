@@ -4,8 +4,16 @@
 #include "decision.h"
 #include "rule_engine.h"
 
+#include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+/* 有合法域名时的偏置分：高于任何"提示词累加"（单个工具最多累到 30 左右），
+ * 低于规则命中的 +50。它表达的是**判别性证据**：句子里出现一个合法域名，
+ * 就是在问"这个名字指向哪"，比「IP」这种软词强得多（「帮我查 example.org 的 IP」
+ * 曾因为 ip 的提示词累加到 20 与 dig 打平，最后选了 ip）。 */
+#define NL_DECISION_DOMAIN_BIAS 45
 
 /* 词典粗筛：中文动作词 → 能力名（只用于排候选，不做最终判定）
  *
@@ -31,8 +39,12 @@ static const NlDecideHint HINTS[] = {
     { "有啥", "ls", 10 },      { "文件清单", "ls", 10 },  { "清单", "ls", 8 },
     { "工作目录", "pwd", 10 },  { "当前路径", "pwd", 10 }, { "所在目录", "pwd", 10 },
     { "在哪个目录", "pwd", 10 },{ "工作路径", "pwd", 10 }, { "现在的位置", "pwd", 10 },
-    { "我在哪", "pwd", 10 },    { "在哪", "pwd", 10 },     { "什么地方", "pwd", 10 },
-    { "哪个文件夹", "pwd", 10 },{ "处在", "pwd", 8 },      { "位置", "pwd", 8 },
+    { "我在哪", "pwd", 10 },    { "什么地方", "pwd", 10 },
+    { "哪个文件夹", "pwd", 10 },
+    /* 「在哪」「位置」「处在」这种 1-2 字的虚词碎片**不能**当提示词：
+     * 「本机现在连在哪个网段」被其中的「在哪」判成 pwd，答案是当前目录。
+     * 提示词必须是带语境的说法（我在哪 / 什么位置），碎片越短越容易撞车。 */
+    { "什么位置", "pwd", 8 },   { "哪个位置", "pwd", 8 },
     { "路径", "pwd", 10 },       { "打印", "pwd", 10 },
     /* ── 文件内容 ── */
     { "查看", "cat", 6 },       { "内容", "cat", 8 },      { "读取", "cat", 8 },
@@ -69,6 +81,19 @@ static const NlDecideHint HINTS[] = {
     /* ── 网络/端口（lsof 是 L1；ss/netstat 未登记 → L4 不放行）── */
     { "端口", "lsof", 10 },     { "监听", "lsof", 10 },    { "网络连接", "lsof", 10 },
     { "连接", "lsof", 8 },      { "开放", "lsof", 8 },
+    /* ── 网卡 / 域名解析（ADR-024）
+     * 这一层认的是"这句话在问哪一类东西"，不是"这句话怎么写"：
+     * 出现网卡/接口/地址/连通 → ip；出现域名/解析/dns/指向 → dig。
+     * 参数不在这里拼：ip 用审查过的字面量参数，dig 的域名走结构化抽取。
+     * 「解析一下这个域名」这种没有域名的句子会在参数抽取那步被跳过（不猜），
+     * 所以这里不设"必须有域名"的门槛。 */
+    { "网卡", "ip", 10 },       { "网络接口", "ip", 10 },  { "网口", "ip", 10 },
+    { "地址", "ip", 10 },       { "网络", "ip", 8 },       { "连通", "ip", 8 },
+    { "联网", "ip", 8 },        { "对外", "ip", 8 },       { "ip地址", "ip", 10 },
+    { "上网", "ip", 8 },        { "连上", "ip", 8 },       { "本机", "ip", 8 },
+    { "ip", "ip", 10 },
+    { "域名", "dig", 10 },      { "解析", "dig", 10 },      { "dns", "dig", 10 },
+    { "指向", "dig", 10 },      { "解析到", "dig", 10 },    { "域名解析", "dig", 10 },
     /* ── 其它工具 ── */
     { "压缩", "tar", 8 },       { "打包", "tar", 8 },      { "解压", "tar", 8 },
     { "下载", "curl", 8 },      { "抓取", "curl", 8 },
@@ -77,12 +102,56 @@ static const NlDecideHint HINTS[] = {
     { NULL, NULL, 0 }
 };
 
+/* 大小写不敏感的子串查找（中文按字节比较，等价于 strstr）。
+ * ADR-024 的教训：「我电脑的IP是多少」里的 IP 是大写，而提示词表里是 "ip"，
+ * strstr 一区分大小写就判成"没认出任何东西"。这类大小写差异对用户毫无意义，
+ * 对识别结果却致命 —— 所以词典匹配一律不区分大小写。 */
+static int contains_ci(const char *hay, const char *needle)
+{
+    if (!hay || !needle || !*needle) return 0;
+    size_t n = strlen(needle);
+    for (const char *p = hay; *p; p++) {
+        size_t i = 0;
+        while (i < n && p[i] &&
+               tolower((unsigned char)p[i]) == tolower((unsigned char)needle[i])) i++;
+        if (i == n) return 1;
+    }
+    return 0;
+}
+
+/* "这句话在问域名"的直接证据：出现下面这些词之一 */
+static int dns_hint_present(const char *input)
+{
+    static const char *const WORDS[] = { "域名", "解析", "dns", "指向", NULL };
+    for (int i = 0; WORDS[i]; i++)
+        if (contains_ci(input, WORDS[i])) return 1;
+    return 0;
+}
+
+/* 常见顶级域：只用来在没有上面那些词时，判断一个"长得像域名"的串到底是主机名还是文件名。
+ * 不在表里不是错，只是不下结论（宁可交给下一层，也不把 README.md 当域名去 dig）。
+ * 这不是在枚举用户说法 —— TLD 是有限、公开、且与"怎么说这句话"无关的集合。 */
+static int tld_is_common(const char *domain)
+{
+    static const char *const TLDS[] = {
+        "com", "cn", "net", "org", "io", "edu", "gov", "info", "biz", "me",
+        "co", "top", "xyz", "dev", "app", "ai", "cc", "tv", "cloud", "site",
+        "online", "tech", "uk", "jp", "de", "fr", "ru", "kr", "hk", "tw",
+        "sg", "us", "eu", "in", "br", "au", "ca", NULL
+    };
+    const char *dot = strrchr(domain, '.');
+    if (!dot || !dot[1]) return 0;
+    for (int i = 0; TLDS[i]; i++)
+        if (strcasecmp(dot + 1, TLDS[i]) == 0) return 1;
+    return 0;
+}
+
 static int hint_score_for(const char *name, const char *input)
 {
     int score = 0;
     for (int i = 0; HINTS[i].keyword != NULL; i++) {
         if (strcmp(HINTS[i].cap_name, name) != 0) continue;
-        if (strstr(input, HINTS[i].keyword) != NULL) score += HINTS[i].weight;
+        if (contains_ci(input, HINTS[i].keyword)) score += HINTS[i].weight;
     }
     return score;
 }
@@ -144,6 +213,7 @@ static const char *cap_for_intent(NlIntentType intent)
     case NL_INTENT_MOVE:           return "cli:mv";
     case NL_INTENT_COPY:           return "cli:cp";
     case NL_INTENT_SEARCH_CONTENT: return "cli:grep";
+    case NL_INTENT_SHOW_NETWORK:   return "cli:ip";
     default:                       return NULL;
     }
 }
@@ -176,9 +246,26 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
 
         const char *name = local_name(c);
         int score = 0;
-        if (name[0] != '\0' && strstr(input, name) != NULL) score += 10;
+        if (name[0] != '\0' && contains_ci(input, name)) score += 10;
         score += hint_score_for(name, input);
         offer(out, c->id, score);
+    }
+
+    /* 结构性偏置：句子里出现一个**合法域名**（形状校验过的），这句话大概率是在问
+     * "这个名字指向哪"，那就是 DNS 查询而不是"看本机地址"。
+     * 「我的 IP 是多少」和「baidu.com 的 IP 是多少」句式几乎一样，区别只在
+     * 有没有域名 —— 这种判断只能做在结构上，写进关键词规则必然在其中一半上判错。
+     * 除非句子里明确指向本机（我的/本机/自己/本地/网卡）。 */
+    {
+        int local_hint = contains_ci(input, "我的") || contains_ci(input, "本机") ||
+                         contains_ci(input, "自己") || contains_ci(input, "本地") ||
+                         contains_ci(input, "网卡") || contains_ci(input, "网口");
+        if (!local_hint) {
+            char *dom = nl_extract_domain(input);
+            if (dom && (dns_hint_present(input) || tld_is_common(dom)))
+                offer(out, "cli:dig", NL_DECISION_DOMAIN_BIAS);
+            free(dom);
+        }
     }
     return 0;
 }

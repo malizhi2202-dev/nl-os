@@ -310,7 +310,7 @@
 - **Then** 输出符合 JSON Schema：
   ```json
   {
-    "intent": "string (enum: create_file|create_dir|delete|move|copy|list_dir|view_file|find_files|change_dir|show_process|search_content|run_cmd|other)",
+    "intent": "string (enum: create_file|create_dir|delete|move|copy|list_dir|view_file|find_files|change_dir|show_process|search_content|run_cmd|show_network|other)",
     "entities": {
       "target": "string | array<string>",
       "location": "string (optional)",

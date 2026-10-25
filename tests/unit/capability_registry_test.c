@@ -289,6 +289,40 @@ static void test_invalid_effect_falls_back(void)
     PASS();
 }
 
+
+/* ADR-024：权限表是权威，注册表只是缓存
+ *
+ * 事故：把 ip 从 L4 改成 L1 之后，老注册表里它还是 L4，而扫描只"新增"从不刷新，
+ * 于是决策层永远看不到这个能力 —— 用户也不会想到"改完表要重扫"。 */
+static void test_perm_map_is_authoritative(void)
+{
+    TEST("perm 以 capability_perm_map.h 为准（source=scan 时刷新）");
+    char path[300];
+    path_for(9, path, sizeof(path));
+
+    FILE *f = fopen(path, "w");
+    ASSERT(f != NULL, "open for write failed");
+    fputs("{\"format_version\":2,\"scanner\":\"test\"}\n", f);
+    /* 过时的 L4 结论：应当被权限表纠正为 L1 */
+    fputs("{\"id\":\"cli:ip\",\"name\":\"ip\",\"path\":\"/usr/bin/ip\",\"perm\":\"L4\","
+          "\"namespace\":\"cli\",\"effect\":\"read\",\"reversible\":true,\"source\":\"scan\",\"trusted\":true}\n", f);
+    /* 人工放行（source 不是 scan）：不被表覆盖 */
+    fputs("{\"id\":\"cli:modprobe\",\"name\":\"modprobe\",\"path\":\"/sbin/modprobe\",\"perm\":\"L1\","
+          "\"namespace\":\"cli\",\"effect\":\"read\",\"reversible\":true,\"source\":\"allow\",\"trusted\":true}\n", f);
+    fclose(f);
+
+    NlCapRegistry *r = nl_cap_load(path, NULL);
+    ASSERT(r != NULL, "load");
+    const NlCapability *ip = nl_cap_find(r, "cli:ip");
+    ASSERT(ip != NULL, "ip 在表里");
+    ASSERT(ip->perm_level == 1, "过时的 L4 被权限表纠正为 L1");
+    const NlCapability *mp = nl_cap_find(r, "cli:modprobe");
+    ASSERT(mp != NULL, "modprobe 在表里");
+    ASSERT(mp->perm_level == 1, "source=allow 的人工放行不被覆盖");
+    nl_cap_free(r);
+    PASS();
+}
+
 int main(void)
 {
     char tmpl[] = "/tmp/nlcap-registry-XXXXXX";
@@ -308,6 +342,7 @@ int main(void)
     test_v2_explicit_effect();
     test_v1_file_defaults();
     test_invalid_effect_falls_back();
+    test_perm_map_is_authoritative();
 
     printf("\n%d/%d passed, %d failed\n", tests_passed, tests_run, tests_failed);
     return tests_failed == 0 ? 0 : 1;

@@ -21,6 +21,11 @@ static const NlCapPermEntry NL_CAP_PERM_MAP[] = {
     { "du", 1 }, { "whoami", 1 }, { "id", 1 }, { "uname", 1 }, { "date", 1 },
     { "echo", 1 }, { "pwd", 1 }, { "which", 1 }, { "file", 1 }, { "sort", 1 },
     { "uniq", 1 }, { "diff", 1 }, { "free", 1 }, { "uptime", 1 }, { "lsof", 1 },
+    /* 网络诊断（ADR-024）：`ip` 能写（ip link set … down），`dig` 能用 `-f` 读任意文件，
+     * 所以"按名字放行"本身不足以为它们背书。它们能列在 L1 的前提是 exec 层
+     * nl_exec_form_allowed() 只放行登记过的**只读形态**（ip -br addr / dig +short <域名>），
+     * 其它形态一律拒绝。改这里的等级前，先看那道形态白名单是否还拦得住。 */
+    { "ip", 1 }, { "dig", 1 },
     /* ── L2 · 修改确认 ── */
     { "mkdir", 2 }, { "touch", 2 }, { "cp", 2 }, { "mv", 2 }, { "tee", 2 },
     { "chmod", 2 }, { "ln", 2 }, { "tar", 2 }, { "gzip", 2 }, { "zip", 2 },

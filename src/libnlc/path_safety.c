@@ -213,6 +213,58 @@ NlPathResult nl_path_check(const char *path, int allow_write) {
 }
 
 /* ============================================================
+ * 域名校验
+ *
+ * 为什么单独校验：`dig +short <domain>` 里域名是模板中唯一的自由文本参数。
+ * exec 层已经不经 shell，但 execvp 仍会把 `-f` 开头的词当选项——「参数当选项」
+ * 是这条命令里唯一剩下的注入面，只有在这里能拦住。所以字符集与形态严格限定，
+ * 不满足一律拒绝（fail-closed），绝不"清洗一下凑合用"。
+ * ============================================================ */
+
+int nl_domain_check(const char *domain)
+{
+    if (!domain || !*domain) return -1;
+
+    size_t len = strlen(domain);
+    if (len > 253) return -1;
+
+    int dots = 0;
+    size_t label_len = 0;
+    char prev = '\0';
+    const char *tld_start = domain;
+
+    for (const char *p = domain; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+
+        if (c == '.') {
+            /* 标签 1..63；点不能在首尾、不能连续；标签不能以 '-' 结尾 */
+            if (label_len == 0 || label_len > 63) return -1;
+            if (prev == '-') return -1;
+            tld_start = p + 1;
+            dots++;
+            label_len = 0;
+            prev = '.';
+            continue;
+        }
+        if (!(isalnum(c) || c == '-')) return -1;      /* 拒绝 _ / : @ 空格 等一切其它字符 */
+        if (c == '-' && label_len == 0) return -1;     /* 标签不能以 '-' 开头（选项注入） */
+        label_len++;
+        prev = (char)c;
+    }
+    if (label_len == 0 || label_len > 63) return -1;   /* 以点结尾 / 标签过长 */
+    if (dots < 1) return -1;                           /* 至少两个标签 */
+    if (prev == '-') return -1;
+
+    /* 顶级域：纯字母且 >= 2（`8.8.8.8`、`1.2.3` 这类不是主机名） */
+    size_t tld_len = strlen(tld_start);
+    if (tld_len < 2) return -1;
+    for (const char *p = tld_start; *p; p++)
+        if (!isalpha((unsigned char)*p)) return -1;
+
+    return 0;
+}
+
+/* ============================================================
  * 输入净化
  * ============================================================ */
 

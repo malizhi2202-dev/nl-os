@@ -6,6 +6,7 @@
  * 读取：按行流式解析（OpenWrt 内存约束），坏行跳过并计数，不整体失败。
  */
 #include "capability_registry.h"
+#include "capability_perm_map.h"
 #include "json_helper.h"
 #include "cJSON.h"
 
@@ -225,6 +226,15 @@ static int parse_cap_line(const char *line, NlCapability *out)
 
     out->source = strdup(source);
     if (!out->path || !out->source) { cap_clear(out); goto done; }
+
+    /* 权限等级以 capability_perm_map.h 为权威，注册表只是缓存（ADR-024）。
+     * 事故：把 ip/dig 登记成 L1 之后，已经存在的注册表里它们仍是 L4 ——
+     * 扫描只"新增"，从不刷新旧结论，于是决策层永远看不到这个能力，
+     * 而用户也不会想到"改完权限表要先 --scan"。所以装载时对 source=scan 的条目
+     * 重新按表取值：表改了立刻生效，无需重扫；source 不是 scan 的（人工放行）
+     * 保持原样，不被表覆盖。 */
+    if (strcmp(out->source, "scan") == 0)
+        pl = nl_cap_perm_for(out->name);
 
     out->perm_level = pl;
     out->trusted = trusted ? 1 : 0;

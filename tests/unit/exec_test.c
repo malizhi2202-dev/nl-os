@@ -85,6 +85,40 @@ static void test_collect_paths(void)
     PASS();
 }
 
+static void test_form_allowlist(void)
+{
+    TEST("restricted binaries: only audited read-only forms (ADR-024)");
+    /* 登记形态：放行 */
+    ASSERT(nl_exec_form_allowed("ip -br addr") == 1, "ip -br addr allowed");
+    ASSERT(nl_exec_form_allowed("dig +short www.baidu.com") == 1, "dig +short allowed");
+
+    /* 同一个二进制的写/危险形态：必须拒绝 */
+    const char *denied[] = {
+        "ip link set ens33 down",
+        "ip addr del 192.168.1.2/24 dev ens33",
+        "ip route add default via 10.0.0.1",
+        "ip addr",
+        "ip -br addr show ens33",
+        "dig -f /etc/passwd",
+        "dig +short -f /etc/passwd",
+        "dig +short example.com extra",
+        "dig @8.8.8.8 example.com",
+        "dig +shortx example.com",
+    };
+    for (size_t i = 0; i < sizeof(denied) / sizeof(denied[0]); i++)
+        ASSERT(nl_exec_form_allowed(denied[i]) == 0, denied[i]);
+
+    /* 拒绝必须在执行前生效（否则就是一条真的改系统的命令） */
+    ASSERT(nl_exec_execute("ip link set lo down", 2000) == -1, "denied at exec");
+
+    /* 未受控的二进制不受影响 */
+    ASSERT(nl_exec_form_allowed("ls -la") == 1, "ls allowed");
+    ASSERT(nl_exec_form_allowed("ps aux") == 1, "ps allowed");
+    ASSERT(nl_exec_form_allowed("") == 0, "empty denied");
+    ASSERT(nl_exec_form_allowed(NULL) == 0, "null denied");
+    PASS();
+}
+
 int main(void)
 {
     printf("exec tests\n");
@@ -94,6 +128,7 @@ int main(void)
     test_execute_failure_code();
     test_execute_timeout();
     test_collect_paths();
+    test_form_allowlist();
     printf("\n%d/%d passed, %d failed\n", tests_passed, tests_run, tests_failed);
     return tests_failed == 0 ? 0 : 1;
 }
