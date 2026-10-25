@@ -25,10 +25,6 @@ Testing/
 CTestTestfile.cmake
 DartConfiguration.tcl
 
-# flow-kit 产物跟踪
-.specs/
-!.specs/.gitkeep
-
 # 系统文件
 .DS_Store
 Thumbs.db
