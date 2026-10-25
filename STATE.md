@@ -6,10 +6,11 @@
 
 ## 当前位置
 
-- **活跃 Change**: `nl-capability-runtime`
-- **当前阶段**: DEV（段 1；T01/T02/T03 完成，下一任务 T04）
-- **当前 Task**: `T04`（capability_selftest：三档分类）
-- **中断任务**（来自 R1.5 清窗）: 无
+- **活跃 Change**: `capability-protocol`（CHANGE 阶段，待反问确认）
+- **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
+- **当前阶段**: CHANGE（新 change `capability-protocol`，0-change 反问中）
+- **当前 Task**: —（新 change 尚在 CHANGE 阶段）
+- **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
   - 有活跃 change → 先读 `@.specs/nl-capability-runtime/CHANGE.md`
   - 恢复历史上下文 → `@.specs/CONTEXT.md`、`@.specs/nl-os/`（一期 MVP 已完成）
