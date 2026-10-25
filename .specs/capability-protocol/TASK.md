@@ -129,7 +129,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T03</depends_on>
 </task>
 
-<task id="T05" parallel="false" status="pending" auto="true">
+<task id="T05" parallel="false" status="done" auto="true">
   <name>ticket：签发 / 校验 / 一次性 / TTL / args 哈希 / 上限 1024+LRU</name>
   <read_files>
     src/nlbroker/verdict.h
@@ -153,7 +153,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T04</depends_on>
 </task>
 
-<task id="T06" parallel="false" status="pending" auto="true">
+<task id="T06" parallel="false" status="done" auto="true">
   <name>cli 适配器：argv plan + commit 执行（不经 shell）</name>
   <read_files>
     src/libnlc/template_fill.h
@@ -176,7 +176,7 @@ W5 HTTP+收口    T13[P] → T14                  │
   <depends_on>T05</depends_on>
 </task>
 
-<task id="T07" parallel="false" status="pending" auto="true">
+<task id="T07" parallel="false" status="done" auto="true">
   <name>审计：JSONL 写入 + audit 查询 + 脱敏（AC-9）</name>
   <read_files>
     src/libnlc/audit.h          <!-- T06 骨架已建 -->

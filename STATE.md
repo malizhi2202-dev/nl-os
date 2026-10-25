@@ -8,8 +8,8 @@
 
 - **活跃 Change**: `capability-protocol`（已进入 DEV，T01 完成）
 - **暂停的 Change**: `nl-capability-runtime`（DEV，T01–T03 完成，T04–T08 待续 → `@.specs/nl-capability-runtime/PROGRESS.md`）
-- **当前阶段**: DEV（capability-protocol；T01–T04 完成，下一任务 T05）
-- **当前 Task**: `T05`（ticket：签发/校验/TTL/args 哈希/上限 1024+LRU）
+- **当前阶段**: DEV（capability-protocol；T01–T07 完成，下一任务 T08 端到端集成）
+- **当前 Task**: `T08`（W2 端到端：discover→describe→invoke→commit→audit + verify_w2.sh）
 - **中断任务**（来自 R1.5 清窗）: `nl-capability-runtime` 的 T04–T08（已暂停，见 PROGRESS.md）
 - **会话开始建议**:
   - 活跃 change → 先读 `@.specs/capability-protocol/TASK.md` + 本文件「流程欠账」段
