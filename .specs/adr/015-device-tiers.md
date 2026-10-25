@@ -51,11 +51,31 @@
 | 在手机上跑模型 | ✅ **完全可行**，且是端侧最强一档（ARMv9 八核 / 12–16GB / NPU；0.6B Q4 可达数十 tok/s，24–30M embedding 单次前向仅数毫秒）。厂商内置（Gemini Nano / Apple 端侧模型）与 App 内自跑（llama.cpp / MLC 编入 APK）都在做 |
 | 在手机上做"系统级 NL 操作" | ❌ 不支持：**问题不在算力，在没有可执行面**。Android 无 FHS（无 `/usr/bin`）、Bionic libc 与 glibc ABI 不兼容、Android 8+ 非 root 下静态可执行被 seccomp 拦截、App 沙箱（独立 uid + SELinux label）拿不到系统能力；"执行一条命令"这个对象本身不存在，可执行面是 Android API、权限模型由系统提供 |
 
-手机上真实的"自然语言操作系统"形态是 **Agent 操作 UI**（截屏 + 视觉模型 + 无障碍服务点击，如 AutoGLM / Mobile-Agent / AppAgent），
-与本项目"C + 模板填充 + L1–L4 + 命令执行"的技术栈没有交集，属**另一条产品线**，不进本 change。
+手机上真实的"自然语言操作系统"形态是 **Agent 操作 UI**，而且**已有成熟模型与框架**（2026 现状）：
 
-**可复用到手机的部分**：仅 `embedding` 意图分类后端（可编为 `.so` 经 NDK 嵌入 App）。
-`能力注册表 / L1–L4 / 模板填充 / fallback` 在手机上无对应对象。
+| 层 | 代表 | 说明 |
+|---|---|---|
+| 模型 | **AutoGLM-Phone-9B**（已有 Multilingual-GGUF）、**GUI-Owl-1.5-8B**、**UI-TARS** | 开源可下载；Q4 量化约 5GB → 需 8GB+ 手机 |
+| 框架 | **Mobile-Agent-v3.5**（多平台 GUI Agent）、**AgentPaw**、**jav**（非 root 控制 + MCP + 双层级 AI：Jev + director） | 已有可运行项目，非 root 方案依赖无障碍服务 / Shizuku |
+| 控制面 | 无障碍服务 / Shizuku / ADB / MCP | 成熟 |
+| 商业 | 各厂商"一句话点外卖"类助手 | 已上市 |
+
+**关键判断不变**：这是另一条产品线，理由不是"没方案"，而是**执行面、模型量级、语言、权限归属、失败模式**五项都不同：
+
+| 维度 | 本项目（Linux 端侧） | 手机 GUI Agent |
+|---|---|---|
+| 执行面 | 命令 / 文件 / 进程 | 屏幕坐标 / 控件树 |
+| 模型 | 25MB embedding + 可选 0.35B | 8–9B VLM（Q4 约 5GB） |
+| 语言 | C11 | Kotlin / Python |
+| 权限裁决权 | 自有 L1–L4（最终裁决在本地） | 系统授予（第三方无最终裁决权） |
+| 失败模式 | 拒绝执行（可审计） | 点错位置（不可逆、难举证） |
+| 投入格局 | 安全执行层近乎空白 | 厂商 + 大厂实验室红海 |
+
+**可复用到手机的部分**：
+1. `embedding` 意图分类后端（可编为 `.so` 经 NDK 嵌入 App）
+2. **决策三原语 `Choice / Score / Noul`**（ADR-013）——`jav` 项目已用"Jev + director"双层级验证过该抽象可服务于手机 UI 控制，候选集从"命令"换成"UI 动作"即可
+
+**不可复用**：`能力注册表 / L1–L4 / 模板填充 / 命令审计` —— 手机上无对应对象。
 
 > 依据：Termux 官方《Differences from Linux》（FHS 不兼容 / Bionic libc / seccomp 限制 / 单用户沙箱）。
 
