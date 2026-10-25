@@ -362,23 +362,31 @@ int nl_decide_candidates(const char *input, const NlCapRegistry *reg, NlCandidat
         };
         /* 内容标记必须是能独立表意的词：裸「里」「下」会误撞
          * 「查看一**下**当前工作目录」→ 被判成"看目录内容"。 */
+        /* 内容标记只收「有什么/内容/清单」这类**表意完整**的词。
+         * 不能收「目录里/目录下」：「现在在哪个**目录里**」问的是"我在哪"，
+         * 带上「目录里」就会把身份问题判成内容问题。 */
         static const char *const CONTENTS[] = {
-            "里面", "底下", "内容", "有什么", "有啥", "清单", "列表", "目录里", "目录下", NULL
+            "里面", "底下", "内容", "有什么", "有啥", "清单", "列表", NULL
         };
-        int has_dir = has_any(txt, DIR_NOUNS);
-        int has_loc = has_any(txt, LOC_NOUNS);
-        /* 「路径/位置」问的是"我在哪"，「目录」默认问的是"里面有什么" */
-        if (has_loc || (has_dir && has_any(txt, IDENTITY)))
-            offer(out, "cli:pwd", NL_DECISION_MARKER_BIAS);
-        if (has_dir && has_any(txt, CONTENTS))
-            offer(out, "cli:ls", NL_DECISION_MARKER_BIAS);
-        /* 光一个容器名词（这个目录 / 工作目录 / 所在文件夹）默认就是"看看这个目录"。
-         * 例外：问"这目录是干什么用的"是在要**解释**，不是要清单 ——
-         * 这类句子里出现目的/用途标记词，就不该被只读兜底接住（它会答成 ls）。 */
+        /* 目的/用途标记：问"这目录干什么用的"是在要**解释**，不是要清单也不是要路径 */
         static const char *const PURPOSE[] = {
             "干什么", "做什么", "干啥", "干嘛", "用来", "起什么作用", "是什么的", NULL
         };
-        if (has_dir && !has_any(txt, PURPOSE))
+        int has_dir = has_any(txt, DIR_NOUNS);
+        int has_loc = has_any(txt, LOC_NOUNS);
+        int purpose = has_any(txt, PURPOSE);
+        int dir_contents = has_dir && has_any(txt, CONTENTS);
+        /* 「什么目录」问的是身份（我在哪），「目录里有什么」问的是内容 ——
+         * 两者都含「什么」，所以内容标记优先，别让身份判断吃掉它。 */
+        int dir_identity = has_dir && !purpose &&
+            (has_any(txt, IDENTITY) || contains_ci(txt, "什么")) && !dir_contents;
+        /* 「路径/位置」问的就是"我在哪" */
+        if (has_loc || dir_identity)
+            offer(out, "cli:pwd", NL_DECISION_MARKER_BIAS);
+        if (dir_contents)
+            offer(out, "cli:ls", NL_DECISION_MARKER_BIAS);
+        /* 光一个容器名词（这个目录 / 工作目录 / 所在文件夹）默认就是"看看这个目录" */
+        if (has_dir && !dir_contents && !dir_identity && !purpose)
             offer(out, "cli:ls", NL_DECISION_MARKER_BIAS - 2);
     }
 

@@ -8,10 +8,11 @@
 
 - **活跃 Change**: `general-not-enumeration`（**已完成**：通用层改造 + ADR-024）
 - **当前阶段**: 7-integration 通过 —— `ctest 36/36`、`verify_exec.sh 84/84`、`verify_hook.sh 35/35`、
-  语义簇 121/121；网络两簇留出集 A 34/35 → B 20/23 → C 19/19（每批跑完即作废）
+  语义簇 121/121 + 旧留出集 55/55；留出集 A 34/35 → B 20/23 → C 19/19 → D 19/19（每批跑完即作废）
 - **通用层（ADR-024）**: 规则 = 高频缓存；决策层 = 语义提示词认能力 + 结构性判别
   （句中有合法域名 → `dig`，否则 → `ip`）；参数只收"审查过的字面量"或"形状校验过的域名"；
-  `ip`/`dig` 能登记 L1 的前提是 exec 层只读形态白名单（`ip -br addr` 全串一致、`dig +short <域名>`）
+  `ip`/`dig` 能登记 L1、`systemctl` 的只读形态能按 L1 跑，前提都是 exec 层的只读形态白名单；
+  名词侧做归一（文件夹≡目录）+ 容器名词×标记词组合，不再逐句加词
 - **已可安装使用**: `bash scripts/install_local.sh` → `~/.local/bin/nlsh`（模型自动发现，无需 export）
 - **已装版本**: 01:12 的 Release（`当前工作路径` = 0.04s / 7.5MB；需要模型的句子 1.3s 内如实拒绝）
 - **终端钩子已装**: `~/.bashrc` 标记块 → `~/.local/share/nl-os/nl-hook.bash`（卸载 `install_local.sh --uninstall-hook`）
