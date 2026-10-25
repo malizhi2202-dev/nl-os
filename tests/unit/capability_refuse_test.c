@@ -36,7 +36,7 @@ static void test_fast_path_audited(void)
     TEST("fast path executes without model and is audited");
     nl_dispatch_set_registry(NULL);
     char out[4096];
-    int rc = nl_dispatch("echo fast-ok", out, sizeof(out));
+    int rc = nl_dispatch("echo fast-ok", out, sizeof(out), 0);
     ASSERT(rc == 0, "fast path should succeed");
     ASSERT(strstr(out, "fast-ok") != NULL, "output must contain command result");
 
@@ -60,7 +60,7 @@ static void test_capability_missing(void)
     nl_dispatch_set_registry(r);
 
     char out[4096];
-    int rc = nl_dispatch("列出当前目录", out, sizeof(out));
+    int rc = nl_dispatch("列出当前目录", out, sizeof(out), 0);
     ASSERT(rc != 0, "must refuse");
     ASSERT(strstr(out, "本机没有该能力") != NULL, "must say capability missing");
     ASSERT(strstr(out, "cli:") != NULL, "must suggest candidates");
@@ -79,7 +79,7 @@ static void test_budget_refuse(void)
     nl_dispatch_set_registry(r);
 
     char out[4096];
-    int rc = nl_dispatch("每天凌晨三点把日志压缩后上传备份", out, sizeof(out));
+    int rc = nl_dispatch("每天凌晨三点把日志压缩后上传备份", out, sizeof(out), 0);
     ASSERT(rc != 0, "must refuse");
     ASSERT(strstr(out, "解析不了") != NULL, "must say cannot parse");
     ASSERT(strstr(out, "替代步骤") != NULL, "must give alternatives");
@@ -97,7 +97,7 @@ static void test_capability_present(void)
     nl_dispatch_set_registry(r);
 
     char out[4096];
-    int rc = nl_dispatch("列出当前目录", out, sizeof(out));
+    int rc = nl_dispatch("列出当前目录", out, sizeof(out), 0);
     ASSERT(rc == 0, "should succeed");
     ASSERT(strstr(out, "ls") != NULL, "output must contain generated command");
     nl_dispatch_set_registry(NULL);

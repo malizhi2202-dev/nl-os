@@ -20,6 +20,21 @@ export NL_MODEL_PATH=/path/to/model.gguf
 | **`nlbroker`** | **能力调用 broker**：CIP v1 协议（discover/describe/invoke/commit/audit），裁决 + ticket + 审计 |
 | `libnlc.so` | 核心 NL 理解库（含 CIP 编解码、注册表、SHA-256、审计） |
 
+## 用自然语言干活
+
+```bash
+./build/nlsh --scan                       # 首次：发现本机能力
+./build/nlsh -c '创建一个叫 demo 的文件夹'   # 写操作：问一次 → 留快照 → 执行 → 审计
+./build/nlsh -c '列出当前目录'              # 只读操作：直接执行
+./build/nlsh --undo                       # 撤销上一次写操作
+```
+
+- 只说能做的：跨多个动作（"创建并进入"）、本机没有对应能力的操作（压缩/发送到远程）会被
+  明确拒绝并给出可执行的替代步骤，**不会**降级成一条近似的破坏性命令。
+- 脚本/自动化：`NL_ASSUME_YES=1` 跳过问询，`--dry-run` 只预演不执行。
+- 交互式中文输入不再被吞（行编辑器支持 UTF-8，管道输入走独立读取路径）。
+
+
 ## 本地 broker（CIP v1）
 
 ```bash

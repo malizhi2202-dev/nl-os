@@ -2,6 +2,8 @@
 #include "nlc_api.h"
 #include "freeze.h"
 #include "snapshot.h"
+#include "exec.h"
+#include "budget.h"
 #include <ctype.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -9,60 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-/*
- * 执行一条已生成的命令：按空白切 argv，**拒绝 shell 元字符**，不经 shell。
- * 这样 .tools 路径与 CIP 的 argv 原则一致，避免注入面。
- */
-static int run_command(const char *cmd, int timeout_ms)
-{
-    if (!cmd || !*cmd) return -1;
-    static const char *banned = "|;&$`><()[]{}*?!\\'\"";
-    for (const char *p = cmd; *p; p++)
-        if (strchr(banned, *p) != NULL) {
-            fprintf(stderr, "❌ 拒绝执行：命令含 shell 元字符 '%c'\n", *p);
-            return -1;
-        }
-
-    char buf[2048];
-    snprintf(buf, sizeof(buf), "%s", cmd);
-    char *argv[64];
-    int n = 0;
-    for (char *tok = strtok(buf, " \t"); tok && n < 63; tok = strtok(NULL, " \t"))
-        argv[n++] = tok;
-    argv[n] = NULL;
-    if (n == 0) return -1;
-
-    pid_t pid = fork();
-    if (pid < 0) return -1;
-    if (pid == 0) { execvp(argv[0], argv); _exit(127); }
-
-    int waited = 0, status = 0;
-    for (;;) {
-        pid_t w = waitpid(pid, &status, WNOHANG);
-        if (w == pid) break;
-        if (w < 0) return -1;
-        if (waited >= timeout_ms) { kill(pid, SIGKILL); (void)waitpid(pid, &status, 0); return -1; }
-        usleep(10 * 1000);
-        waited += 10;
-    }
-    if (!WIFEXITED(status)) return -1;
-    return WEXITSTATUS(status);
-}
-
-/* 从已生成命令里提取目标路径（跳过 argv0 与 -flag） */
-static int collect_paths(const char *cmd, char paths[][512], int max)
-{
-    char buf[2048];
-    snprintf(buf, sizeof(buf), "%s", cmd);
-    int n = 0, idx = 0;
-    for (char *t = strtok(buf, " \t"); t && n < max; t = strtok(NULL, " \t"), idx++) {
-        if (idx == 0 || t[0] == '-') continue;
-        snprintf(paths[n], 512, "%.500s", t);
-        n++;
-    }
-    return n;
-}
-
 int main(int argc,char**argv){
     if(argc<2){fprintf(stderr,"用法: nl-run <file.tools>\n");return -1;}
     int dry_run=0, do_freeze=0;
@@ -105,6 +53,16 @@ int main(int argc,char**argv){
     for(int i=0;i<s->count;i++){
         printf("[%d/%d] %s\n",i+1,s->count,s->lines[i]);
         if(dry_run)continue;
+        /* 与 nlsh 同一道复杂度闸门：多动作/无对应能力 → 整步拒绝，不降级成单条命令 */
+        {
+            NlBudgetDetail bd;
+            if(nl_budget_check(s->lines[i], NULL, &bd)==NL_BUDGET_REFUSE){
+                fprintf(stderr,"❌ 步骤 %d 拒绝执行：超出能力边界（",i+1);
+                for(int k=0;k<bd.dim_count;k++) fprintf(stderr,"%s%s",k?"、":"",nl_budget_dim_str(bd.dims[k]));
+                fprintf(stderr,"）\n");
+                nl_script_free(s);nl_free();return i+1;
+            }
+        }
         NlParseResult r;
         if(nl_parse(s->lines[i],&r)!=0||!r.command){fprintf(stderr,"❌ 步骤 %d 失败: 无法解析\n",i+1);nl_script_free(s);nl_free();return i+1;}
         if(r.needs_confirm&&!s->allow_l2){printf("⚠️ 需要确认 (L%d): %s\n输入 yes 继续: ",r.perm_level,r.command);char yn[8];if(!fgets(yn,sizeof(yn),stdin)||strncmp(yn,"yes",3)!=0){printf("已取消\n");nl_parse_result_free(&r);nl_script_free(s);nl_free();return i+1;}}
@@ -112,7 +70,7 @@ int main(int argc,char**argv){
         if(!dry_run && (r.needs_confirm || r.perm_level >= 2)){
             char ps[8][512];
             const char *arr[8];
-            int np = collect_paths(r.command, ps, 8);
+            int np = nl_exec_collect_paths(r.command, ps, 8);
             for(int k=0;k<np;k++) arr[k]=ps[k];
             if(np > 0){
                 char sdir[1024];
@@ -122,7 +80,7 @@ int main(int argc,char**argv){
             }
         }
         if(!dry_run){
-            int rc = run_command(r.command, 5000);
+            int rc = nl_exec_execute(r.command, 5000);
             if(rc!=0){
                 fprintf(stderr,"❌ 步骤 %d 失败: 退出码 %d\n",i+1,rc);
                 nl_parse_result_free(&r);nl_script_free(s);nl_free();return i+1;

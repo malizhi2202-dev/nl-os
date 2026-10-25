@@ -77,6 +77,7 @@ add_library(nlc SHARED
     src/libnlc/decision_model.c
     src/libnlc/freeze.c
     src/libnlc/snapshot.c
+    src/libnlc/exec.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)
 target_link_libraries(nlc PUBLIC cjson Threads::Threads m)

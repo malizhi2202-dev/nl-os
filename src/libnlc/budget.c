@@ -21,7 +21,24 @@ static const char *const PRIV_WORDS[] = {
     NULL
 };
 
-static const char *const CHAIN_WORDS[] = { "然后", "接着", "并且", "同时", NULL };
+/*
+ * 多动作连接词：出现任意一个就说明这句话要两件以上的事。
+ * 原来阈值是「≥3 次」，导致「…并清理原文件」被放行、随后被规则层降级成
+ * 单条 `rm -rf`（UAT S4）。链式执行不在能力边界内 → 如实拒绝。
+ */
+static const char *const CHAIN_WORDS[] = {
+    "并", "然后", "接着", "最后", "之后", "同时", NULL
+};
+
+/*
+ * 本机/本层没有对应能力的操作词：宁可说"做不到"，也不近似成别的动作。
+ * 与 COMPOSITE_WORDS 的区别是这里表达的是「缺少能力」而非「语义太复杂」。
+ */
+static const char *const UNSUPPORTED_WORDS[] = {
+    "压缩", "解压", "打包", "排序", "替换", "发送", "远程",
+    "上传", "下载", "定时", "监控", "循环", "递归", "批量",
+    "并发", "守护", NULL
+};
 
 static int contains_any(const char *input, const char *const *words)
 {
@@ -87,7 +104,8 @@ NlBudgetVerdict nl_budget_check(const char *input, const NlCapRegistry *r,
 
     if (contains_any(input, COMPOSITE_WORDS)) add_dim(detail, NL_DIM_COMPOSITE);
     if (contains_any(input, PRIV_WORDS)) add_dim(detail, NL_DIM_PRIVILEGE);
-    if (count_chain(input) >= 3) add_dim(detail, NL_DIM_TOO_MANY_CAPS);
+    if (contains_any(input, UNSUPPORTED_WORDS)) add_dim(detail, NL_DIM_UNKNOWN_CAP);
+    if (count_chain(input) >= 1) add_dim(detail, NL_DIM_TOO_MANY_CAPS);
 
     if (detail->dim_count == 0) return NL_BUDGET_PASS;
 

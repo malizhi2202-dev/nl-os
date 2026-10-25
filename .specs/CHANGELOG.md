@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-10-25 · nlsh 执行接线：说一句就生效，且先说清边界（change `nlsh-exec`）
+
+**修复（安全优先）**
+
+- UAT S4：`把 /var/log 下所有 .log 按大小排序压缩后发到远程服务器并清理原文件` 曾被规则层降级成
+  `rm -rf 原文件`。预算层新增两个拒绝来源：**多动作连接词**（`并/然后/接着/最后/之后/同时`，阈值 3→1）
+  与**无对应能力的操作词**（压缩/排序/发送/远程/下载/定时/循环…）→ `NL_DIM_UNKNOWN_CAP`
+- 子命令注入：`创建一个叫 x; touch hacked` 会被解析成 `touch hacked` 并执行（生成命令本身干净，
+  命令级 guard 拦不住）→ dispatch 入口加**输入级闸门**（`; | & $ \` > <` 直接拒绝）
+- 行编辑器只能输入 ASCII：`printf '中文…' | nlsh` 得到残缺字符串，交互式中文同样打不进去 →
+  非 TTY 走 `fgets`，TTY 接受 UTF-8 多字节，退格按完整字符删
+
+**变更**
+
+- `nlsh` 真正执行自然语言结果：确认门（`needs_confirm || perm>=2`，`NL_ASSUME_YES=1` 可跳过，
+  EOF = 取消）→ 权限 → 快照 → `execvp`（不经 shell）→ 审计（result/duration）
+- 执行器从 `nl-run` 抽到 `libnlc/exec.c`，两处共用；`nl-run` 每步也过同一道预算闸门
+- `--dry-run` 贯通 `-c` 与 REPL；解析失败时按关键词给候选（`重启 nginx` → `cli:systemctl`）
+- `--decide` 的方法名如实化：规则已确定、模型没解码时输出 `rule-decisive`，不再谎称 `choice-llm`
+
+**实测**
+
+- `scripts/verify_exec.sh` 36/36；`ctest` 30/30（Debug/Release）；段 1/2/3 验收 12/12、18/18、16/16；
+  `verify_all.sh` 0 失败
+- 120 条评测集不变（93 ok / 27 refused / 91.4%），新维度未误伤合法句子
+- Release 端到端：只读 0.05–0.07s，写操作（含确认门+快照+执行）0.03–0.06s
+
 ## 2026-10-25 · 规则层与决策层打通 + 槽位剥离（修 `mkdir -p demo 的文件夹`）
 
 **修复**

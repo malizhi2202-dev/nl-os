@@ -66,7 +66,8 @@ chk "AC-8 未给出任何能力" "! grep -q '\"chosen\":\"cli:' '$WORK/amb.txt'"
 chk "AC-8 拒答退出码非 0" "[ $rc -ne 0 ]"
 # 高阈值下即使模型给出选择也必须降级为 uncertain（仅 decoder 档可测）
 if [ "$MODE" = "decoder" ]; then
-    NL_DECIDE_MIN_CONF=1.0 "$BUILD/nlsh" --decide '创建一个叫 ac8 的文件夹' >"$WORK/conf.txt" 2>/dev/null
+    # 单个候选时规则层already决定、模型不解码，闸门无从生效；强制 solo 解码才真正测到阈值
+    NL_DECIDE_MIN_CONF=1.0 NL_DECIDE_SOLO_DECODE=1 "$BUILD/nlsh" --decide '创建一个叫 ac8 的文件夹' >"$WORK/conf.txt" 2>/dev/null
     cat "$WORK/conf.txt"
     chk "AC-8 阈值 1.0 时不再执行选择" "grep -qE '\"method\":\"(low-confidence|rule-fallback)\"' '$WORK/conf.txt'"
 fi

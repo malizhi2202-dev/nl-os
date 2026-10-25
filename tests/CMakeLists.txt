@@ -268,3 +268,11 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/snapshot_test.c)
     target_link_libraries(test_snapshot PRIVATE nlc)
     add_test(NAME snapshot COMMAND test_snapshot)
 endif()
+
+# 共享执行器（nlsh-exec / AC-8）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/exec_test.c)
+    add_executable(test_exec unit/exec_test.c)
+    target_include_directories(test_exec PRIVATE ${CMAKE_SOURCE_DIR}/src/libnlc)
+    target_link_libraries(test_exec PRIVATE nlc)
+    add_test(NAME exec COMMAND test_exec)
+endif()

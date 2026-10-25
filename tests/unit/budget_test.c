@@ -71,6 +71,46 @@ static void test_pass_simple(void)
     PASS();
 }
 
+
+/*
+ * UAT S4 回归：这句话当初没被任何词表命中，被规则层降级成 `rm -rf 原文件`。
+ * 多动作（并…）+ 无对应能力操作（排序/压缩/发送/远程）必须拒绝。
+ */
+static void test_refuse_uat_s4(void)
+{
+    TEST("UAT S4 sentence refused (multi-action + unsupported op)");
+    NlBudgetDetail d;
+    const char *s4 = "把 /var/log 下所有 .log 按大小排序压缩后发到远程服务器并清理原文件";
+    ASSERT(nl_budget_check(s4, g_reg, &d) == NL_BUDGET_REFUSE, "must refuse S4");
+    int has_chain = 0, has_unknown = 0;
+    for (int i = 0; i < d.dim_count; i++) {
+        if (d.dims[i] == NL_DIM_TOO_MANY_CAPS) has_chain = 1;
+        if (d.dims[i] == NL_DIM_UNKNOWN_CAP) has_unknown = 1;
+    }
+    ASSERT(has_chain, "must report 跨能力过多");
+    ASSERT(has_unknown, "must report 能力不存在（本机没有压缩/排序/发送能力）");
+    PASS();
+}
+
+/* 反向守卫：合法的单动作句子不能被新维度误伤 */
+static void test_pass_not_over_refused(void)
+{
+    TEST("single-action sentences still pass (no over-refusal)");
+    const char *inputs[] = {
+        "清理 /tmp 目录",
+        "删除 keepme",
+        "创建一个叫 uat 的文件夹",
+        "列出当前目录的文件",
+        "查看 README.md 的内容",
+        "进入 /tmp/uat-demo 目录",
+    };
+    for (size_t i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
+        NlBudgetDetail d;
+        ASSERT(nl_budget_check(inputs[i], g_reg, &d) == NL_BUDGET_PASS, inputs[i]);
+    }
+    PASS();
+}
+
 static void test_empty_input(void)
 {
     TEST("empty input passes (no false refuse)");
@@ -85,7 +125,9 @@ int main(void)
     seed_registry();
     printf("budget tests\n");
     test_refuse_complex();
+    test_refuse_uat_s4();
     test_pass_simple();
+    test_pass_not_over_refused();
     test_empty_input();
     nl_cap_free(g_reg);
     printf("\n%d/%d passed, %d failed\n", tests_passed, tests_run, tests_failed);

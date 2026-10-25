@@ -76,8 +76,11 @@ static int run_decide(const char *reg_path, const char *input, int no_model) {
             status = "ok";
         } else {
             NlChoiceStatus st = nl_choose_with_model(m, input, &c, chosen, sizeof(chosen));
+            /* 规则已确定时模型根本不解码（confidence 保持 -1）——如实标成 rule-decisive，
+             * 否则把"没问模型"说成 choice-llm，会让 --decide 的可解释性失真 */
+            double p = nl_model_last_confidence(m);
             nl_model_free(m);
-            if (st == NL_CHOICE_OK)       { method = "choice-llm";  status = "ok"; }
+            if (st == NL_CHOICE_OK)       { method = (p >= 0.0) ? "choice-llm" : "rule-decisive"; status = "ok"; }
             else if (st == NL_CHOICE_REFUSE) { method = "model-refuse"; }
             else if (st == NL_CHOICE_UNCERTAIN) { method = "low-confidence"; }
             else {
@@ -225,19 +228,19 @@ int main(int argc, char **argv) {
 
     if(cmd) {
         char out[4096];
-        int rc = nl_dispatch(cmd,out,sizeof(out));
-        printf("%s\n",out);
+        /* dispatch 自己负责打印（执行路径需要与子进程输出交错） */
+        int rc = nl_dispatch(cmd,out,sizeof(out),dry_run);
         if (reg) nl_cap_free(reg);
         return rc == 0 ? 0 : 1;
     } else {
         printf("NL-Shell v0.1 · 输入自然语言或传统命令 · Ctrl+C 中断 · Ctrl+D 退出\n");
+        fflush(stdout);
         while(g_running) {
             char *line=nl_readline("nl> ");
             if(!line) { printf("\n"); break; }
             if(strlen(line)==0) { free(line); continue; }
             nl_history_add(line);
-            if(dry_run) { NlParseResult r; if(nl_parse(line,&r)==0) printf("[dry-run] %s\n",r.command?r.command:"(none)"); nl_parse_result_free(&r); }
-            else { char out[4096]; nl_dispatch(line,out,sizeof(out)); printf("%s\n",out); }
+            { char out[4096]; (void)nl_dispatch(line,out,sizeof(out),dry_run); }
             free(line);
         }
     }
