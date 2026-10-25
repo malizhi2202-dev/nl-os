@@ -51,6 +51,7 @@ int                       nl_cap_save_atomic(NlCapRegistry *r, const char *path)
 int                       nl_cap_add(NlCapRegistry *r, const NlCapability *c);
 const NlCapability       *nl_cap_find(const NlCapRegistry *r, const char *id);
 int                       nl_cap_count(const NlCapRegistry *r);
+int                       nl_cap_skipped(const NlCapRegistry *r); /* 加载时跳过的坏行数 */
 const char               *nl_cap_default_path(void);
 const char               *nl_cap_err_str(NlCapLoadErr e);
 void                      nl_cap_free(NlCapRegistry *r);

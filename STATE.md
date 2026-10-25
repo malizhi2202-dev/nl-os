@@ -7,8 +7,8 @@
 ## 当前位置
 
 - **活跃 Change**: `nl-capability-runtime`
-- **当前阶段**: DESIGN（DESIGN.md + ADR-012/013/014 已产出；G2 方案门 3/4 通过 → 进入 TASK）
-- **当前 Task**: —
+- **当前阶段**: DEV（段 1；T01/T02 完成，下一任务 T03）
+- **当前 Task**: `T03`（capability_scan：白名单扫描 + symlink 标记 + 权限映射）
 - **中断任务**（来自 R1.5 清窗）: 无
 - **会话开始建议**:
   - 有活跃 change → 先读 `@.specs/nl-capability-runtime/CHANGE.md`

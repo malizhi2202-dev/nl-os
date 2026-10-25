@@ -71,7 +71,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   <depends_on></depends_on>
 </task>
 
-<task id="T02" parallel="true" status="pending" auto="true">
+<task id="T02" parallel="true" status="done" auto="true">
   <name>capability_registry：JSONL 读写 + format_version + flock + 原子写 0600</name>
   <read_files>
     .specs/adr/012-capability-registry.md
@@ -81,6 +81,7 @@ Wave 5:                   T08   ← 🔒 段 1 集成 + 注册表格式冻结（
   </read_files>
   <write_files>
     src/libnlc/capability_registry.c
+    src/libnlc/capability_registry.h   <!-- 扩范围：须暴露 nl_cap_skipped() 供坏行计数（见 T02-SUMMARY） -->
     tests/unit/capability_registry_test.c
   </write_files>
   <action>
