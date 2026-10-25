@@ -20,6 +20,12 @@
 
 **核心 gap**：目前没有人在做「把 NL 理解能力变成 OS 的第 5 个基础抽象」（继进程、文件、内存、网络之后）。
 
+> ⚠️ **2026-10-25 更正**：这句话写于项目起步时，**不准确**。外部核查发现 2025–2026 已存在
+> 「agent / MCP 防火墙」赛道（Belay、StrongDM Leash、Pipelock、Docker MCP Gateway、Cupcake、Lasso 等），
+> 「让 AI 不闯祸」不是空位；且 MCP 工具注册表、AWS Agent Registry 已在做运行时工具发现。
+> 仍然成立的差异只剩：**端侧资源档位（≤4GB / 512MB 级）+ 零运行时（C11）+ 中文 + 本机能力自发现**。
+> 详见 `@.specs/discovery/claim-verification.md`。原文保留不改写，作为决策历史的现场记录。
+
 ### 用户需求映射
 
 用户需求文档 21 条按主题聚类：

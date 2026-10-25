@@ -108,6 +108,27 @@
 
 ---
 
+## 差异化假设校正（2026-10-25 外部核查）
+
+外部核查（网络 / 论坛 / GitHub）发现「安全执行层是空白」这一假设**被推翻**：
+
+- 2025–2026 已形成 agent / MCP 防火墙赛道：Belay（本地确定性策略，~77µs/次，MIT）、
+  StrongDM Leash（eBPF LSM + Cedar）、Pipelock（出口代理 + OS 沙箱）、Docker MCP Gateway、
+  Cupcake（OPA/Rego → Wasm）、Lasso、Invariant（Snyk）
+- 能力自发现有现成形态：MCP 工具注册表、AWS Agent Registry、HF Agentic Resource Discovery、PowerShell `Get-Command`
+
+**收窄后的差异化（三条，均可验证）**：
+
+1. 端侧资源档位：≤4GB（下沿 512MB SoC）可用；现有方案依赖 Python / Rust / 容器，物理上装不进
+2. 零运行时：C11 + 系统 llama.cpp，无解释器、无容器（OpenWrt 可用）
+3. 中文 + 本机能力自发现：能力清单随机器走
+
+**已被占、不要重复造**：策略语言（YAML/Rego/Cedar）、MCP 代理、CI 轨迹回放、容器/eBPF 强隔离。
+
+依据：`@.specs/discovery/claim-verification.md`
+
+---
+
 > 后续 AC 与设计细节进入 `REQUIREMENT.md` / `DESIGN.md`，本文件不再扩展。
 
 ---
