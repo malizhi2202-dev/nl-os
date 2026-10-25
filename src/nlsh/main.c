@@ -223,7 +223,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    NlCapRegistry *reg = nl_cap_load(reg_path, NULL);
+    /* 传统命令走快路径时根本不需要注册表（只有自然语言路径要查"本机有没有这个能力"）。
+     * 满表 1891 条约 356KB，全量解析占掉一次调用 30ms 里的大头——这里省掉它。 */
+    NlCapRegistry *reg = NULL;
+    if (!(cmd && nl_is_traditional_cmd(cmd))) reg = nl_cap_load(reg_path, NULL);
     nl_dispatch_set_registry(reg);
 
     if(cmd) {

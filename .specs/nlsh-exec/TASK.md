@@ -64,3 +64,4 @@
 | 2026-10-25 | `src/nlsh/main.c` 方法名 `rule-decisive` | `--decide` 在"规则已确定、模型未解码"时谎称 `choice-llm`，可解释性失真 | 按 `nl_model_last_confidence() < 0` 区分 |
 | 2026-10-25 | `scripts/verify_segment2.sh` AC-8 用例 | 单候选时短路，阈值闸门测不到；原断言靠环境偶然通过 | 用例加 `NL_DECIDE_SOLO_DECODE=1` 强制解码 |
 | 2026-10-25 | `tests/unit/budget_test.c`（改扩写而非新建） | 仓库已有同名测试，新建会变成两份 | 直接扩写（ponytail 阶梯 2） |
+| 2026-10-25 | `src/nlsh/main.c` 快路径懒加载（T07） | 用户追问"快路径 ≤5ms 为啥不动"；实测满表 20–50ms、空表 0–10ms，耗时几乎全在注册表全量解析，而快路径不需要注册表 | 传统命令时不加载注册表；实测 30ms → 0–10ms，NL 路径不变 |
