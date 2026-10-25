@@ -79,7 +79,7 @@
 | `libnlc/decision.c` | 候选收缩、GBNF 构造、Choice/Score/Noul、降级 | `nl_decide(input, K, out)` |
 | `libnlc/freeze.c` | `.tools` 头解析、逐行链式 hash、固化生成 | `nl_freeze_write()`, `nl_freeze_verify()` |
 | `libnlc/snapshot.c` | 快照写入、敏感排除、LRU、撤销 | `nl_snapshot_take()`, `nl_snapshot_undo(n)` |
-| `libnlc/audit_log.c` | 结构化审计（既有 `nl-perm/audit_log.c` 需抽出复用，避免双份实现） | `nl_audit_emit(rec)` |
+| `libnlc/audit.c` | 结构化审计 JSONL（与 `nl-perm/audit_log.c` 的 syslog 并存，职责不同、不互相替代） | `nl_audit_emit(rec)` |
 
 ---
 

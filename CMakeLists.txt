@@ -67,6 +67,10 @@ add_library(nlc SHARED
     src/libnlc/intent_extract.c
     src/libnlc/few_shot.c
     src/libnlc/nlc_api.c
+    src/libnlc/capability_registry.c
+    src/libnlc/capability_scan.c
+    src/libnlc/budget.c
+    src/libnlc/audit.c
 )
 target_include_directories(nlc PUBLIC src/libnlc)
 target_link_libraries(nlc PUBLIC cjson Threads::Threads)

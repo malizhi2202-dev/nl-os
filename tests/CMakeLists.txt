@@ -86,3 +86,48 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/model/schema_validation_test.c)
     target_link_libraries(test_schema_validation PRIVATE nlc cjson)
     add_test(NAME schema_validation COMMAND test_schema_validation)
 endif()
+
+# 能力注册表（T02 · nl-capability-runtime）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/capability_registry_test.c)
+    add_executable(test_capability_registry unit/capability_registry_test.c)
+    target_include_directories(test_capability_registry PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_capability_registry PRIVATE nlc cjson)
+    add_test(NAME capability_registry COMMAND test_capability_registry)
+endif()
+
+# 能力扫描（T03）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/capability_scan_test.c)
+    add_executable(test_capability_scan unit/capability_scan_test.c)
+    target_include_directories(test_capability_scan PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_capability_scan PRIVATE nlc cjson)
+    add_test(NAME capability_scan COMMAND test_capability_scan)
+endif()
+
+# 能力自检（T04）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/capability_selftest_test.c)
+    add_executable(test_capability_selftest unit/capability_selftest_test.c)
+    target_include_directories(test_capability_selftest PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_capability_selftest PRIVATE nlc cjson)
+    add_test(NAME capability_selftest COMMAND test_capability_selftest)
+endif()
+
+# 复杂度预算（T05）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/budget_test.c)
+    add_executable(test_budget unit/budget_test.c)
+    target_include_directories(test_budget PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_budget PRIVATE nlc cjson)
+    add_test(NAME budget COMMAND test_budget)
+endif()
+
+# 结构化审计（T06）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/audit_test.c)
+    add_executable(test_audit unit/audit_test.c)
+    target_include_directories(test_audit PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_audit PRIVATE nlc cjson)
+    add_test(NAME audit COMMAND test_audit)
+endif()
