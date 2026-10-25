@@ -149,3 +149,21 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/verdict_test.c)
     target_link_libraries(test_verdict PRIVATE nlc cjson)
     add_test(NAME verdict COMMAND test_verdict)
 endif()
+
+# ticket（T05 · capability-protocol；include .c 复用 broker 侧单元）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/ticket_test.c)
+    add_executable(test_ticket unit/ticket_test.c)
+    target_include_directories(test_ticket PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker)
+    target_link_libraries(test_ticket PRIVATE nlc)
+    add_test(NAME ticket COMMAND test_ticket)
+endif()
+
+# cli 适配器（T06）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/adapter_cli_test.c)
+    add_executable(test_adapter_cli unit/adapter_cli_test.c)
+    target_include_directories(test_adapter_cli PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/libnlc ${CMAKE_SOURCE_DIR}/src/nlbroker ${CMAKE_SOURCE_DIR}/third_party/cJSON)
+    target_link_libraries(test_adapter_cli PRIVATE nlc cjson)
+    add_test(NAME adapter_cli COMMAND test_adapter_cli)
+endif()
