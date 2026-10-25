@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>给 Linux 加一层“说人话”的操作界面：NL-OS 项目拆解</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#222;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.85}.toolbar{position:sticky;top:0;z-index:2;padding:12px;text-align:center;background:#fff;border-bottom:1px solid #e8e8e8}button{border:0;border-radius:6px;padding:10px 18px;background:#07c160;color:#fff;font-size:15px;cursor:pointer}.hint{margin-left:10px;color:#777;font-size:13px}article{max-width:780px;margin:24px auto;padding:38px 44px;background:#fff;box-shadow:0 2px 14px #0000000a}h1{font-size:30px;line-height:1.4;margin:0 0 24px;color:#172b4d}h2{font-size:23px;line-height:1.5;margin:42px 0 16px;padding-bottom:8px;border-bottom:1px solid #eee;color:#172b4d}h3{font-size:18px;margin:28px 0 10px;color:#263b53}p,li{font-size:16px}p{margin:14px 0}blockquote{margin:18px 0;padding:10px 16px;border-left:4px solid #07c160;background:#f6fbf8;color:#50605a}table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}th,td{border:1px solid #e5e7eb;padding:9px;text-align:left;vertical-align:top}th{background:#f6f8fa}pre{overflow:auto;padding:14px;background:#f6f8fa;border-radius:5px;line-height:1.55;font-size:13px;white-space:pre-wrap;word-break:break-word}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#f3f4f6;padding:2px 4px;border-radius:3px;font-size:.92em}pre code{background:none;padding:0}hr{border:0;border-top:1px solid #eee;margin:32px 0}strong{color:#172b4d}ul,ol{padding-left:1.5em}li{margin:5px 0}@media(max-width:640px){article{margin:0;padding:24px 18px}h1{font-size:25px}h2{font-size:21px}.hint{display:block;margin:7px 0 0}}
+</style>
+</head>
+<body>
+<div class="toolbar"><button id="copy">复制正文到微信公众号</button><span class="hint">点击后切换到公众号编辑器粘贴；若浏览器阻止复制，请手动选中文章复制。</span></div>
+<article id="article"><h1 id="linux-nl-os">给 Linux 加一层“说人话”的操作界面：NL-OS 项目拆解</h1>
+<blockquote>
+<p>从一句中文，到一条经过检查的系统操作：这个项目试着把自然语言放进 Linux 的执行链里，同时把模型能做什么、不能做什么写进架构。</p>
+</blockquote>
+<p>你可能遇到过这样的时刻：知道自己想做什么，却一时想不起 Linux 命令；或者知道命令，却不确定参数会不会带来意外结果。大模型看起来能补上这层“意图到命令”的翻译，但如果让模型直接生成任意 shell 命令并自动执行，便利和风险也会一起到来。</p>
+<p>NL-OS 想探索另一种做法：让用户用中文描述目标，由本机程序识别意图、选择已登记的能力，再通过权限、确认和执行流程完成操作。它不是要替代 Linux，也不是一个云端聊天机器人，而是给 Linux 增加一层自然语言交互入口。</p>
+<p>本文会从项目定位、架构、执行时序、技术取舍、同类方案差异和上手方式，完整介绍 NL-OS 当前做到了什么，以及还没有做到什么。</p>
+<h2 id="nl-os">一、NL-OS 是什么</h2>
+<p>NL-OS 是运行在 Linux 用户态的自然语言操作层。用户可以在 <code>nlsh</code> 里输入中文，也可以选择安装 Bash 钩子，在普通终端提示符下直接输入中文指令。</p>
+<p>例如：</p>
+<pre><code class="language-text">列出当前目录
+显示当前工作目录
+创建一个叫 demo 的文件夹
+</code></pre>
+<p>对于系统能安全识别的操作，NL-OS 会将意图映射到本机已登记的能力，并沿着权限检查、确认、执行、审计这条路径处理。它不修改 Linux 内核，也不要求用户换掉 Bash；传统命令仍可照常使用。</p>
+<p>项目采用 C11 和 CMake，推理使用 GGUF 模型及 ggml 相关代码。设计目标包含低资源 Linux 和边缘设备，但对外描述时需要区分“目标”和“已验证”：当前仓库明确记录的实测平台是 Linux x86_64；ARM64、musl/OpenWrt 和更低内存档位还需要目标设备上的完整验证。</p>
+<h2 id="_1">二、它要解决什么问题</h2>
+<h3 id="1">1. 命令行的门槛</h3>
+<p>Linux 命令行很强大，但用户需要同时记住命令名称、参数、路径规则和组合方式。对偶尔使用终端的人来说，“我知道要做什么”与“我能准确写出命令”之间仍有一道门槛。</p>
+<h3 id="2">2. 自然语言执行的信任问题</h3>
+<p>如果系统把模型生成的一整行命令直接交给 shell，模型输出就拥有了 shell 语法的全部表达能力，包括管道、重定向、命令替换和多条命令组合。提示词可以提醒模型谨慎，却不能构成执行层面的安全边界。</p>
+<p>NL-OS 的核心取舍是：把自然语言解析与命令执行分开。模型最多参与有限候选的判断；实际动作由代码、注册表、模板和权限规则约束。无法可靠映射的输入可以拒绝，而不是猜一个“差不多”的命令。</p>
+<h3 id="3">3. 端侧环境的约束</h3>
+<p>不少 Linux 设备没有桌面环境，也可能没有稳定网络、容器或完整语言运行时。项目因此选择 C11、较少的外部依赖和本地执行路径，尝试覆盖开发机以外的设备形态。</p>
+<p>这是一条工程方向，不等于目前已经在所有嵌入式设备上验证成功。现阶段能确认的是仓库具备面向这些约束的设计；目标设备的编译、模型内存、响应延迟和真实操作体验仍需单独验收。</p>
+<h2 id="_2">三、为什么做这个项目</h2>
+<p>项目的出发点，是把“意图”当作计算机交互的一层：人表达想完成的事情，系统再把它翻译成具体、可检查的操作。</p>
+<p>但 NL-OS 并没有把这个想法扩展成一个万能 Agent。项目迭代中做了两次重要收敛：</p>
+<p>第一，不再把安全执行层说成无人涉足的空白。市场上已有面向 Agent、MCP 或开发流程的权限网关和安全工具。NL-OS 更具体的探索方向，是在本地 Linux 上结合中文交互、本机能力清单、权限分级和较轻的运行时形态。</p>
+<p>第二，放弃了完整的 <code>.nl</code> 编程语言。自然语言脚本的表达力越强，静态约束就越难。项目目前保留 <code>.tools</code>：把一组受控的操作步骤固化成可复用脚本，而不是再造一门有函数、包和类型系统的通用语言。</p>
+<h2 id="_3">四、这个项目的意义在哪里</h2>
+<p>NL-OS 的意义不只在于“中文可以变成 Linux 命令”。如果只是把一句话交给模型，再把模型写出的命令扔进 shell，做一个演示并不难；真正值得探索的是，能不能让自然语言成为系统交互入口，同时让每一步动作仍然可检查、可拒绝、可追溯。</p>
+<h3 id="_4">对使用者：降低表达门槛，但保留知情权</h3>
+<p>用户可以先说目标，不必一开始就记住命令和参数。系统在需要修改文件时展示即将执行的动作并要求确认；能力不明确时可以拒绝。它希望减少“记命令”的负担，同时不把重要操作变成用户看不见的后台行为。</p>
+<h3 id="linux">对 Linux 工具生态：探索一层统一的意图接口</h3>
+<p>Linux 上有大量成熟命令和服务，问题往往不是缺少工具，而是每个工具的调用方式、参数和权限语义各不相同。能力注册表与 CIP 协议尝试把本机能力用统一结构描述，再把发现、裁决、提交和审计串起来。若这条路线成熟，交互入口可以变化，底层工具仍由现有系统提供。</p>
+<h3 id="_5">对端侧设备：把离线和资源约束纳入设计</h3>
+<p>在没有稳定网络、桌面界面或完整运行时的 Linux 设备上，云端 Agent 不一定可用。NL-OS 选择 C11、本地处理和较少依赖，是在探索能否把自然语言交互放到设备本身。这个意义目前仍是工程目标；要成为现实，需要在 ARM64、OpenWrt 和低内存设备上完成实际构建与使用验证。</p>
+<h3 id="ai">对 AI 系统设计：把“拒绝”当成正常结果</h3>
+<p>一个实用的系统不应只展示成功路径。NL-OS 的设计强调：未登记的能力不自动放行，危险操作不能被模型的判断降级，执行服务不可用时不继续执行，用户不确认就取消。它并不能消除所有风险，但把“系统不知道时该怎么办”变成架构问题，而不是留给提示词临场发挥。</p>
+<p>因此，NL-OS 当前更像一项可运行、可测试的系统交互探索，而不是已经证明能普遍提升 Linux 效率的成熟产品。它的意义要靠后续证据建立：真实任务是否更容易完成、误匹配和拒答率是多少、设备资源是否达标、审计与撤销是否真正有帮助。</p>
+<h3 id="_6">这个项目适合谁</h3>
+<ul>
+<li>想用中文完成常见 Linux 查询和受控文件操作的终端用户。</li>
+<li>需要把本地命令能力纳入统一登记、权限判断和审计流程的开发者。</li>
+<li>关注边缘 Linux、离线运行和系统级轻依赖的设备集成者。</li>
+</ul>
+<p>如果需求是“让 AI 自由规划并连续操作整台电脑”，NL-OS 目前并不是这个方向。它更适合能力范围明确、动作可审查、拒绝未知操作也能接受的场景。</p>
+<h2 id="_7">五、整体架构：解析、裁决、执行分层</h2>
+<p>NL-OS 的自然语言入口经过逐级处理。规则和固定只读默认值优先；只有前面无法处理时，才进入较慢的模型路径。</p>
+<pre><code class="language-text">用户输入
+  ↓
+nlsh / Bash 中文输入钩子
+  ↓
+输入安全检查与复杂度预算
+  ↓
+规则匹配
+  ├─ 命中 → 意图与槽位
+  └─ 未命中 → 决策层候选收缩
+                 ├─ 命中已审查的只读默认项 → 固定能力与参数
+                 └─ 未命中 → 常驻模型 / 进程内模型（若可用）
+  ↓
+能力映射与参数检查
+  ↓
+权限裁决与统一确认门
+  ↓
+快照（适用时）→ 执行 → 审计
+</code></pre>
+<p>这条链路涉及的主要组件如下：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nlsh</code></td>
+<td>自然语言终端、传统命令分发、确认和结果回显</td>
+</tr>
+<tr>
+<td><code>libnlc</code></td>
+<td>输入处理、规则、决策、模型接口、模板、快照和审计等核心逻辑</td>
+</tr>
+<tr>
+<td><code>nl-perm</code></td>
+<td>独立权限守护进程，按 L1–L4 规则裁决自然语言操作</td>
+</tr>
+<tr>
+<td><code>nlbroker</code></td>
+<td>CIP 能力调用 broker，管理注册表、裁决、一次性 ticket 和审计</td>
+</tr>
+<tr>
+<td><code>nl-run</code></td>
+<td>执行 <code>.tools</code> 脚本</td>
+</tr>
+<tr>
+<td>能力注册表</td>
+<td>保存本机发现的能力及权限等元数据，未知能力默认从严处理</td>
+</tr>
+</tbody>
+</table>
+<p>这里有两条相邻但不同的路径：<code>nlsh</code> 的自然语言交互路径，以及 <code>nlbroker</code> 提供的 CIP 能力调用协议。CIP 为能力调用提供 discover、describe、invoke、commit、audit 等报文；它不是说所有 <code>nlsh</code> 中文句子都已经通过 broker 执行。</p>
+<h3 id="_8">解析为什么要分级</h3>
+<p>当前入口的顺序是：</p>
+<ol>
+<li><strong>规则层</strong>：覆盖确定性较高的常见说法，不必加载模型。</li>
+<li><strong>决策层兜底</strong>：在候选收缩后，仅对审查过的 L1 只读能力使用固定参数。例如“显示当前工作目录”可映射到 <code>pwd</code>，“看看磁盘还剩多少”可映射到 <code>df -h</code>。参数来自代码中的固定表，输入和模型都不能拼接参数。</li>
+<li><strong>模型路径</strong>：常驻服务或进程内模型处理更难的输入。该路径耗时和资源占用更高，也可能拒绝输入。</li>
+</ol>
+<p>仓库记录的特定开发机测量中，规则命中约 0.04 秒；只读决策兜底示例约 11–12 毫秒；需要 0.5B 模型推理时约为秒级到二十秒量级，具体取决于路径、机器和测试方式。它们是开发机上的观测值，不是所有硬件的性能承诺。尤其不要把“模型常驻”理解成推理本身变快：常驻主要减少重复加载开销。</p>
+<h2 id="_9">六、技术方案：让动作来自受控结构</h2>
+<h3 id="1-c11">1. C11 与轻依赖</h3>
+<p>系统主体使用 C11，CMake 构建；项目采用 ggml/GGUF 相关实现进行本地模型处理，JSON 处理使用 cJSON，另使用 POSIX 线程和 Unix domain socket 等系统接口。这样做是为了降低目标环境对解释器、容器和大型运行时的依赖。</p>
+<p>轻依赖不等于“什么设备都能运行”。模型大小、内存峰值、CPU 推理速度、编译器和 libc 都会影响实际部署；需要按具体设备测量。</p>
+<h3 id="2_1">2. 安全检查前置</h3>
+<p>自然语言输入在解析和执行前经过输入检查。当前实现会拒绝可能改变 shell 语义的元字符输入，例如分号、管道、重定向和命令替换相关字符；也会处理特定控制字符和路径安全检查。</p>
+<p>这里要分清自然语言路径与传统命令路径：用户明确输入 <code>ls | head</code> 这样的传统 shell 命令时，仍按传统命令语义处理。自然语言安全闸门并不是整个 Bash 的通用沙箱。</p>
+<h3 id="3_1">3. 规则优先，模型后置</h3>
+<p>常见、明确的表达尽量由规则处理。规则没有命中时，系统可根据本机能力候选进一步判断。有限候选可以通过受约束输出限制模型的选择空间；候选之外的结果不能因为模型“很自信”就变成可执行能力。</p>
+<p>当前的快速兜底还有更严格的限制：只对明确列入权限映射的 L1 只读能力生效，参数只能取自固定默认表。像 <code>grep</code>、<code>du</code> 这类通常需要路径或筛选参数的命令，不会为了“看起来聪明”而猜参数。</p>
+<h3 id="4-argv">4. 模板与 argv，而不是模型自由写命令</h3>
+<p>规则路径将意图和实体映射到预先定义的模板。CIP 路径则把待执行计划表达为 argv 数组，不将命令字符串交给 shell 解释。两者共同的设计方向是限制动作的来源和结构，避免模型输出任意 shell 语法。</p>
+<p>这不代表所有输入都能表达。管道、重定向、复杂条件和多步组合目前不是自然语言执行能力的通用部分；超出已实现能力时，应当拒绝或给出替代步骤。</p>
+<h3 id="5-fail-closed">5. 权限分级、确认与 fail-closed</h3>
+<p>项目使用 L1–L4 权限模型：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>含义</th>
+<th>典型处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L1</td>
+<td>只读能力</td>
+<td>通常直接执行</td>
+</tr>
+<tr>
+<td>L2</td>
+<td>修改操作</td>
+<td>展示动作并要求确认</td>
+</tr>
+<tr>
+<td>L3</td>
+<td>删除等高风险操作</td>
+<td>要求确认，并在适用时保留撤销快照</td>
+</tr>
+<tr>
+<td>L4</td>
+<td>禁止执行或未获准能力</td>
+<td>拒绝</td>
+</tr>
+</tbody>
+</table>
+<p>具体等级由显式权限映射和策略决定；扫描器不会通过读帮助文本来猜权限，未登记能力按默认拒绝处理。统一确认策略中，<code>y</code>、<code>yes</code>、<code>是</code> 等明确肯定输入才算确认；直接回车或 EOF 是取消。<code>--yes</code> / <code>NL_ASSUME_YES=1</code> 用于明确选择的自动化场景。权限服务或 broker 不可用时，自然语言操作拒绝执行，传统命令仍可使用。</p>
+<p>对支持快照的写入或删除操作，系统会尝试在执行前记录可撤销状态；敏感路径会从内容快照中排除。快照机制有适用范围，不能把它理解成全盘备份，也不能保证所有外部副作用都能恢复。</p>
+<h2 id="_10">七、交互时序：从一句话到执行结果</h2>
+<p>以“创建一个叫 demo 的文件夹”为例，规则命中时主路径如下：</p>
+<pre><code class="language-text">用户          nlsh/解析层         权限与确认          执行器          审计
+ │                 │                  │                 │              │
+ │ 输入中文        │                  │                 │              │
+ ├────────────────▶│                  │                 │              │
+ │                 │ 安全检查/匹配    │                 │              │
+ │                 │ 生成受控动作     │                 │              │
+ │                 ├─────────────────▶│ 检查权限：L2   │              │
+ │                 │                  │ 请求确认        │              │
+ │◀───────────────────────────────────┤                 │              │
+ │ 输入 y          │                  │                 │              │
+ ├───────────────────────────────────▶│                 │              │
+ │                 │                  │ 创建前快照      │              │
+ │                 │                  ├────────────────▶│              │
+ │                 │                  │                 │ 执行 mkdir  │
+ │                 │                  │                 ├─────────────▶│
+ │                 │                  │                 │ 记录结果    │
+ │◀────────────────────────────────────────────────────────────────────┤
+ │ 显示执行结果    │                  │                 │              │
+</code></pre>
+<p>用户确认不是“模型替用户同意”。模型只能参与前面的意图判断；确认门、权限等级和执行结果分别由系统路径处理。用户直接回车或输入流结束时，操作取消，不会默认同意。</p>
+<h3 id="cip">CIP 两阶段调用时序</h3>
+<p>对于通过 broker 调用的能力，协议把裁决与实际执行分成两步：</p>
+<pre><code class="language-text">调用方                  nlbroker                    能力执行面
+  │                         │                            │
+  │ invoke(capability,args) │                            │
+  ├────────────────────────▶│                            │
+  │                         │ 检查注册表/权限/effect      │
+  │◀────────────────────────┤ verdict + plan + ticket    │
+  │                         │                            │
+  │ 展示计划并取得确认       │                            │
+  │ commit(ticket,args)      │                            │
+  ├────────────────────────▶│ 验 ticket、时效与参数哈希  │
+  │                         ├───────────────────────────▶│
+  │                         │                            │ 执行 argv
+  │                         │◀───────────────────────────┤
+  │◀────────────────────────┤ 结果与审计                 │
+</code></pre>
+<p>ticket 是一次性凭证，有有效期并绑定能力和参数哈希。这样，<code>invoke</code> 阶段只产生裁决和待执行计划，不能直接偷偷完成操作；<code>commit</code> 才会进入执行面。</p>
+<h2 id="tools">八、能力发现与 <code>.tools</code></h2>
+<p>NL-OS 会扫描本机部分命令目录，生成 JSON Lines 格式的能力注册表。注册表记录发现到的能力及其路径、可信状态和权限等信息。没有登记或无法判断的能力不会因为“系统上恰好有这个命令”就自动获得执行权限。</p>
+<p>项目也包含 <code>.tools</code> 脚本路线：把已确认的操作固化为顺序步骤，执行时校验文件完整性，并沿用统一确认、权限和审计机制。它的定位是受限的可重放操作序列，不是通用编程语言。</p>
+<h3 id="_11">关键设计取舍</h3>
+<p>这套设计把“可检查”放在“什么都能做”之前，因此有明确的取舍：</p>
+<table>
+<thead>
+<tr>
+<th>选择</th>
+<th>得到什么</th>
+<th>付出的代价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>规则优先、模型后置</td>
+<td>高频操作响应快，规则路径结果可预测</td>
+<td>新说法需要扩规则或词典，覆盖面不会自动增长</td>
+</tr>
+<tr>
+<td>模型选候选，不自由写命令</td>
+<td>限制模型能表达的动作范围</td>
+<td>候选缺失时无法靠模型创造新能力</td>
+</tr>
+<tr>
+<td>未登记能力默认拒绝</td>
+<td>降低误调用未审查程序的风险</td>
+<td>新命令需要显式登记和评估</td>
+</tr>
+<tr>
+<td>argv / 结构化计划</td>
+<td>不让 shell 再解释一段拼出来的命令字符串</td>
+<td>管道、重定向等 shell 组合能力不在通用协议里</td>
+</tr>
+<tr>
+<td>写操作确认、失败关闭</td>
+<td>用户能看到动作，安全服务异常时不放行 NL 执行</td>
+<td>多一次确认；服务故障时自然语言入口不可用</td>
+</tr>
+<tr>
+<td><code>.tools</code> 顺序脚本</td>
+<td>可以固化、校验和重放一组受限步骤</td>
+<td>不提供循环、条件分支等完整语言能力</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_12">出错时系统应该怎么做</h3>
+<p>安全相关的默认行为是拒绝而不是猜测：输入里出现自然语言路径不接受的 shell 元字符时会被拦截；权限级别不允许时直接拒绝；用户不确认时取消；broker 或权限服务不可达时拒绝自然语言操作；ticket 过期或参数哈希不匹配时拒绝提交；模型输出无法解析或不在允许候选内时不应转成可执行动作。</p>
+<p>这并不意味着系统不会出错，也不等同于形式化证明。它表达的是错误发生时的处理方向：失败路径不应该悄悄变成更宽松的执行路径。</p>
+<h2 id="_13">九、与同类方案相比：差异是定位，不是排名</h2>
+<p>“AI + 命令行”和“Agent 安全控制”都有不少项目，产品形态也在快速变化。NL-OS 不适合用未经统一测试的速度、准确率或安全性数字宣称全面领先。更合适的比较维度是它尝试解决的环境与约束：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>常见开发者 AI CLI / Agent 工具</th>
+<th>NL-OS 的设计侧重点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主要场景</td>
+<td>开发机上的编码、问答或 Agent 工作流</td>
+<td>Linux 本地操作入口与端侧能力调用</td>
+</tr>
+<tr>
+<td>交互语言</td>
+<td>依产品而异，很多以英文开发者场景为主</td>
+<td>面向中文自然语言输入，同时保留传统命令</td>
+</tr>
+<tr>
+<td>执行约束</td>
+<td>依产品采用命令生成、审批、沙箱或工具调用等方式</td>
+<td>规则/候选/注册表/权限表/确认门组合；模型不应决定权限放行</td>
+</tr>
+<tr>
+<td>运行形态</td>
+<td>常见为较完整的开发环境或 Agent 运行时</td>
+<td>C11、系统接口和较少依赖是设计目标</td>
+</tr>
+<tr>
+<td>能力来源</td>
+<td>插件、工具、Agent 配置或服务端能力</td>
+<td>尝试发现本机能力并登记；未知能力默认拒绝</td>
+</tr>
+</tbody>
+</table>
+<p>这张表描述的是产品方向，不是对每一个竞品版本的逐项审计。NL-OS 的潜在优势在于中文交互、本机能力注册、显式权限边界和轻运行时取舍；它的代价是功能范围有限、能力映射需要维护、复杂指令支持不足，而且端侧适配仍需更多实机验证。</p>
+<h2 id="_14">十、如何使用</h2>
+<h3 id="1_1">1. 安装</h3>
+<p>在 Linux 环境中，仓库提供本地安装脚本：</p>
+<pre><code class="language-bash">bash scripts/install_local.sh
+</code></pre>
+<p>脚本默认安装到用户目录，通常不需要 root。构建依赖和手动构建方式见 <code>docs/BUILD.md</code>。</p>
+<h3 id="2_2">2. 扫描本机能力</h3>
+<pre><code class="language-bash">nlsh --scan
+</code></pre>
+<h3 id="3_2">3. 用自然语言操作</h3>
+<pre><code class="language-bash">nlsh
+</code></pre>
+<p>也可以单次执行：</p>
+<pre><code class="language-bash">nlsh -c '列出当前目录'
+nlsh -c '创建一个叫 demo 的文件夹'
+</code></pre>
+<p>写操作会按策略要求确认。自动化脚本可使用 <code>--dry-run</code> 预演；只有在明确需要非交互运行时，才使用 <code>--yes</code> 或 <code>NL_ASSUME_YES=1</code>。</p>
+<h3 id="4-bash">4. 可选：在 Bash 提示符直接输入中文</h3>
+<p>安装脚本可配置 Bash 钩子。它只接管命令不存在且包含中文的输入，不替换已有的 <code>ls</code>、<code>git</code> 等真实命令：</p>
+<pre><code class="language-text">显示当前工作目录
+进入 /tmp 目录
+</code></pre>
+<p>新开终端后生效。可用 <code>NL_SHELL_HOOK=0</code> 关闭钩子；卸载钩子可运行：</p>
+<pre><code class="language-bash">bash scripts/install_local.sh --uninstall-hook
+</code></pre>
+<h3 id="5">5. 撤销与审计</h3>
+<pre><code class="language-bash">nlsh --undo
+nlsh --audit
+</code></pre>
+<p>撤销仅适用于系统保留了有效快照的操作；审计用于查看操作记录，不代表外部服务或不可逆动作都能恢复。</p>
+<h3 id="_15">从源码构建</h3>
+<p>需要 CMake、GCC 或 Clang，以及 pthread 等系统组件：</p>
+<pre><code class="language-bash">mkdir build &amp;&amp; cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j&quot;$(nproc)&quot;
+</code></pre>
+<p>模型可通过 <code>NL_MODEL_PATH</code> 指定，也可放在项目约定目录供自动发现。初次体验规则路径时，可以先不下载模型；模型文件较大，是否需要取决于你要验证的输入是否会落到模型层。</p>
+<h3 id="_16">如何验证项目</h3>
+<p>仓库包含单元测试和分段验收脚本。常用入口包括：</p>
+<pre><code class="language-bash">ctest --test-dir build --output-on-failure
+bash scripts/verify_exec.sh
+bash scripts/verify_hook.sh
+</code></pre>
+<p>验证结果应结合具体构建配置、模型、机器和脚本版本解读。运行验收脚本前建议查看脚本说明；钩子验收设计为使用假程序和临时 HOME，避免改动真实用户配置。</p>
+<h2 id="_17">十二、适用场景示例</h2>
+<h3 id="a">场景 A：查询系统状态</h3>
+<p>用户说“看看磁盘还剩多少”。如果规则或决策层识别为已审查的只读查询，就可以使用固定参数运行 <code>df -h</code>，无需加载模型。若没有匹配到受控能力，系统会继续后续路径或拒绝。</p>
+<h3 id="b">场景 B：创建目录</h3>
+<p>用户说“创建一个叫 demo 的文件夹”。系统识别目标名称，检查输入和路径，再按写操作策略展示动作并等待确认；确认后执行，并记录结果。用户直接回车会取消。</p>
+<h3 id="c">场景 C：请求超出支持范围</h3>
+<p>用户说“把日志里最近一小时的超时请求筛出来并打包发给同事”。这句话包含筛选、时间条件、打包和发送等多个动作。当前系统不应把它偷偷简化为某一个近似命令；它可以拒绝并提示拆成明确步骤。这个例子体现了项目把能力边界显式化的设计。</p>
+<h2 id="_18">十三、项目目前的阶段与后续路线</h2>
+<p>从仓库状态看，NL-OS 已有自然语言交互、规则与决策路径、权限确认、快照/撤销、审计、能力注册表和 CIP broker 等实现；但这不等于所有模块都达到生产部署标准。</p>
+<p>后续值得优先推进的方向包括：</p>
+<ol>
+<li>扩充中文指令评测集，并公布数据集、覆盖范围、拒答率和准确率分母。</li>
+<li>改善需要路径和参数的请求处理，同时坚持参数来源可审查，避免退回自由拼接命令。</li>
+<li>在目标 ARM64、musl/OpenWrt 和低内存设备上做完整构建、内存与延迟实测。</li>
+<li>优化模型推理延迟和资源占用，分别记录模型加载时间与实际推理时间。</li>
+<li>通过真实用户任务评估拒答体验、误匹配和撤销能力，而不是只看单元测试数量。</li>
+</ol>
+<p>这些是基于当前已知边界归纳出的工程方向，不代表它们已经全部进入正式排期。</p>
+<h2 id="_19">十四、当前边界与待验证项</h2>
+<p>对项目保持准确描述，需要同时讲清楚限制：</p>
+<ul>
+<li>需要路径、筛选条件或复杂参数的自然语言请求，仍可能进入慢速模型路径或被拒绝；快速兜底目前主要覆盖固定参数的只读查询。</li>
+<li>0.5B 模型在低核数环境上仍可能需要数秒甚至更久；常驻服务减少重复加载，但没有消除推理延迟。</li>
+<li>中文评测集规模有限，现有准确率依赖具体数据集、候选集和统计口径，不等于通用自然语言理解准确率。</li>
+<li>ARM64、musl/OpenWrt、低内存档位和更大模型档位尚未全部完成实机验证。不要将设计目标写成已支持或已达标。</li>
+<li>传统 shell 命令路径保留 shell 原有表达能力；NL-OS 的输入安全检查针对自然语言操作路径，不是系统级沙箱。</li>
+<li>能力表、模板和固定参数带来可审查性，也限制了系统能做的事情。遇到未登记能力或复杂组合时，拒绝是预期行为。</li>
+</ul>
+<h2 id="_20">十五、总结</h2>
+<p>NL-OS 试图回答一个具体问题：能不能让用户用自然语言操作 Linux，同时不把任意命令生成权交给概率模型？</p>
+<p>它的回答不是“模型足够聪明”，而是“把可做的事情限制在系统可以检查的范围内”：规则先行、候选有限、能力需登记、权限显式分级、写操作要求确认，broker 调用采用两阶段提交，失败时拒绝执行。</p>
+<p>这让它更像一项端侧系统交互实验，而不是已经覆盖所有 Linux 操作的成熟产品。中文入口、轻依赖、本机能力管理和明确的拒绝边界，是当前值得继续验证的方向；复杂指令、推理延迟、目标设备适配和评测规模，则是接下来需要逐步补齐的工作。</p>
+<p>如果你在做 Linux 设备、边缘计算或命令行工具，也欢迎从真实设备和真实任务出发检验它：哪些操作值得自然语言化，哪些动作必须保留人工确认，哪些能力应当默认拒绝？这些问题的答案，最终应该由可复现的测试和使用反馈决定。</p>
+<p>——</p>
+<p><strong>项目说明</strong>：NL-OS 是开源项目，仓库许可证为 MIT。本文依据当前仓库文档和实现整理；文中的性能数字均为特定环境下的记录，不构成跨设备承诺。发布前可在文末补充项目仓库链接、作者介绍和配图。</p></article>
+<script>
+document.getElementById('copy').addEventListener('click', () => {
+  const root = document.getElementById('article');
+  [root, ...root.querySelectorAll('*')].forEach(el => {
+    const css = getComputedStyle(el);
+    el.style.fontFamily = css.fontFamily; el.style.fontSize = css.fontSize;
+    el.style.lineHeight = css.lineHeight; el.style.color = css.color;
+    if (['H1','H2','H3','P','LI','BLOCKQUOTE','TABLE','TH','TD','PRE','CODE','HR'].includes(el.tagName)) {
+      el.style.marginTop = css.marginTop; el.style.marginBottom = css.marginBottom;
+    }
+  });
+  const selection = window.getSelection();
+  const range = document.createRange(); range.selectNodeContents(root);
+  selection.removeAllRanges(); selection.addRange(range);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) {}
+  selection.removeAllRanges();
+  const button = document.getElementById('copy');
+  button.textContent = ok ? '已复制，去公众号编辑器粘贴' : '复制未成功，请手动选择正文复制';
+  setTimeout(() => button.textContent = '复制正文到微信公众号', 3500);
+});
+</script>
+</body>
+</html>
