@@ -9,6 +9,7 @@
 - **活跃 Change**: `nlsh-exec`（**T01–T10 全部完成**；`nl-capability-runtime` 仍等 UAT 签核）
 - **当前阶段**: `nlsh-exec` 已过 7-integration（验收 **81/81**、`ctest` 31/31、四角色通过；确认策略经专家团统一为 ADR-019 并做了全矩阵落地测试），**等用户签核 UAT**
 - **已可安装使用**: `bash scripts/install_local.sh` → `~/.local/bin/nlsh`（模型自动发现，无需 export）
+- **已安装版本**: 23:01 装的含惰性加载的 Release（`列出当前目录下的文件` = 0.04s / 7.6MB；规则未命中仍 1.9s / 677MB，属设计内）。**改完源码必须重跑 `install_local.sh`**，否则用户路径还是旧二进制
 - **当前 Task**: 无未完成项；`nl-capability-runtime/UAT.md` 的 12 个场景已由 AI 实跑 12/12（场景 3/4 由本 change 修复）
 - **模型已就位**: `~/.local/share/nl-os/qwen2.5-0.5b-q4_0.gguf`（428MB，Qwen2.5-0.5B-Instruct q4_0）
 - **中断任务**（来自 R1.5 清窗）: 无
